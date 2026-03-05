@@ -31,8 +31,8 @@ library(evaluatr)
 
 # ---- Credentials (test repository) -----------------------------------------
 GITHUB_USERNAME <- "JoieEnsor"
-REPO_NAME       <- "clinical-models-test"
-GITHUB_TOKEN    <- ""          # <-- insert the shared read-only PAT here
+REPO_NAME       <- "evaluatr_testing_environment"
+GITHUB_TOKEN    <- "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"
 
 # ---- Load sample dataset ----------------------------------------------------
 mimic_path   <- system.file("extdata", "mimic_sample.csv", package = "evaluatr")
@@ -60,27 +60,27 @@ cat("  creatinine_sq:  range [",
     round(range(mimic_processed$creatinine_sq), 3),  "]\n\n")
 
 # Now call secure_model_validation with the processed dataset.
-# The JSON for sample_model_004 lists "log_creatinine" and "creatinine_sq"
+# The JSON for sample_model_003 lists "log_creatinine" and "creatinine_sq"
 # in its variables field, so these columns are automatically used.
 
-## Uncomment once sample_model_004 is uploaded to the test repository:
+## Uncomment once sample_model_003 is uploaded to the test repository:
 # result_processed <- secure_model_validation(
 #   repo_owner      = GITHUB_USERNAME,
 #   repo_name       = REPO_NAME,
-#   model_id        = "sample_model_004",
+#   model_id        = "sample_model_003",
 #   github_token    = GITHUB_TOKEN,
 #   validation_data = mimic_processed,
 #   outcome         = "AKI"
 # )
 # performance_processed <- calculate_pmextval_metrics(
-#   result_processed, n_boot = 200, decision_threshold = 0.25
+#   result_processed, n_boot = 50, decision_threshold = 0.25
 # )
 # performance_processed$metrics
 
 # =============================================================================
 # SCENARIO B: Developer-side pre-processing (runs immediately)
 # =============================================================================
-# The standard AKI model (sample_model_002) uses raw variables only, so no
+# The standard AKI model (sample_model_004) uses raw variables only, so no
 # evaluator-side pre-processing is needed. Developer-embedded transformations
 # in the prediction_function string are executed automatically inside the
 # isolated prediction environment.
@@ -88,7 +88,7 @@ cat("  creatinine_sq:  range [",
 result_standard <- secure_model_validation(
   repo_owner      = GITHUB_USERNAME,
   repo_name       = REPO_NAME,
-  model_id        = "sample_model_002",
+  model_id        = "sample_model_004",
   github_token    = GITHUB_TOKEN,
   validation_data = mimic_sample,
   outcome         = "AKI"
@@ -98,7 +98,7 @@ performance_standard <- calculate_pmextval_metrics(
   validation_result    = result_standard,
   generate_plots       = TRUE,
   confidence_intervals = TRUE,
-  n_boot               = 200,
+  n_boot               = 50,
   decision_threshold   = 0.25
 )
 

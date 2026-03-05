@@ -19,8 +19,8 @@ library(evaluatr)
 
 # ---- Credentials (test repository) -----------------------------------------
 GITHUB_USERNAME <- "JoieEnsor"
-REPO_NAME       <- "clinical-models-test"
-GITHUB_TOKEN    <- ""          # <-- insert the shared read-only PAT here
+REPO_NAME       <- "evaluatr_testing_environment"
+GITHUB_TOKEN    <- "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"
 MODEL_ID        <- "sample_model_002"
 
 # ---- Load sample dataset ----------------------------------------------------
@@ -54,7 +54,7 @@ performance_by_gender <- calculate_pmextval_metrics(
   validation_result    = mimic_by_result,
   generate_plots       = TRUE,        # generates separate plots per subgroup
   confidence_intervals = TRUE,
-  n_boot               = 200,
+  n_boot               = 50,
   decision_threshold   = 0.25,
   by                   = mimic_by_result$shuffled_by   # pass the shuffled labels
 )

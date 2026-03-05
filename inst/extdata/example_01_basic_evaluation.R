@@ -21,9 +21,9 @@ library(evaluatr)
 
 # ---- Credentials (test repository) -----------------------------------------
 GITHUB_USERNAME <- "JoieEnsor"
-REPO_NAME       <- "clinical-models-test"
-GITHUB_TOKEN    <- ""          # <-- insert the shared read-only PAT here
-MODEL_ID        <- "sample_model_002"
+REPO_NAME       <- "evaluatr_testing_environment"
+GITHUB_TOKEN    <- "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"
+MODEL_ID        <- "sample_model_001"
 
 # ---- Load the sample dataset ------------------------------------------------
 mimic_path   <- system.file("extdata", "mimic_sample.csv", package = "evaluatr")
@@ -47,7 +47,7 @@ performance <- calculate_pmextval_metrics(
   validation_result    = mimic_result,
   generate_plots       = TRUE,
   confidence_intervals = TRUE,
-  n_boot               = 200,          # increase to 1000 for publication
+  n_boot               = 50,
   decision_threshold   = 0.25
 )
 

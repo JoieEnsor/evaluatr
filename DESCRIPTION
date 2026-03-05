@@ -1,0 +1,34 @@
+Package: evaluatr
+Title: Secure Independent Evaluation of Clinical Prediction Models
+Version: 0.1.0
+Authors@R: 
+    person("Joie", "Ensor", email = "j.ensor@bham.ac.uk", role = c("aut", "cre"))
+Description: Provides a two-component system for independent evaluation of clinical
+    prediction models while preserving commercial viability and data sovereignty.
+    Evaluators can retrieve model specifications from a developer's private GitHub
+    repository (using a time-limited fine-grained personal access token) and compute
+    predictions locally on their own dataset, without ever exposing the model
+    coefficients or transmitting patient data. Performance metrics and diagnostic
+    plots for binary prediction models are included.
+License: GPL (>= 3)
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.1.0)
+Imports:
+    curl (>= 5.0.0),
+    jsonlite (>= 1.8.0),
+    ggplot2 (>= 3.4.0),
+    CalibrationCurves (>= 2.0.0),
+    rmda (>= 1.6),
+    rms (>= 6.0),
+    ResourceSelection (>= 0.3)
+Suggests:
+    pROC,
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+URL: https://github.com/JoieEnsor/evaluatr
+BugReports: https://github.com/JoieEnsor/evaluatr/issues

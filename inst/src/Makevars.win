@@ -1,0 +1,13 @@
+# src/Makevars.win — Windows (Rtools 4.x / 4.5)
+#
+# Rtools bundles libcurl under the mingw toolchain sysroot.
+# The variable $(RTOOLS45_HOME) is set by R when Rtools45 is installed;
+# older Rtools42/43 used $(RTOOLS42_HOME) — adjust if needed.
+#
+# To verify your Rtools path in R, run:
+#   Sys.getenv("RTOOLS45_HOME")   # e.g. C:/rtools45
+
+PKG_CPPFLAGS = -I"$(RTOOLS45_HOME)/x86_64-w64-mingw32.static.posix/include"
+PKG_LIBS     = -L"$(RTOOLS45_HOME)/x86_64-w64-mingw32.static.posix/lib" \
+               -lcurl -lssl -lcrypto -lzstd -lbrotlidec -lbrotlicommon \
+               -lz -lws2_32 -lcrypt32 -lwldap32

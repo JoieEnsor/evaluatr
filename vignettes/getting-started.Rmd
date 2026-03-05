@@ -1,0 +1,138 @@
+---
+title: "Getting Started with evaluatr"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with evaluatr}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Overview
+
+The **evaluatr** package enables independent external validation of clinical
+prediction models while preserving model confidentiality and patient data
+privacy. It implements a two-component system:
+
+- **Developer side:** model coefficients and prediction code are stored in a
+  private GitHub repository.
+- **Evaluator side:** this package retrieves and uses those specifications
+  locally, without exposing coefficients or transmitting patient data.
+
+## Installation
+
+```{r}
+# Install from GitHub (requires devtools)
+devtools::install_github("JoieEnsor/evaluatr")
+```
+
+## Step 1 — Obtain access from the model developer
+
+The model developer will provide you with:
+
+1. Their **GitHub username** (e.g. `"developer-name"`)
+2. The **repository name** (e.g. `"my-models"`)
+3. The **model ID** (e.g. `"aki_model_v1"`) — this identifies the folder
+   within the repository
+4. A **time-limited fine-grained GitHub PAT** with read-only access to that
+   repository
+
+Store the token securely (e.g. with `usethis::edit_r_environ()`):
+
+```{r}
+# ~/.Renviron
+EVALUATR_TOKEN=github_pat_...
+```
+
+## Step 2 — Run secure validation
+
+```{r}
+library(evaluatr)
+
+# Load your validation dataset
+my_data <- read.csv("path/to/my_validation_data.csv")
+
+# Compute predictions
+result <- secure_model_validation(
+  repo_owner      = "developer-name",
+  repo_name       = "my-models",
+  model_id        = "aki_model_v1",
+  github_token    = Sys.getenv("EVALUATR_TOKEN"),
+  validation_data = my_data,
+  outcome         = "AKI"   # name of outcome column in my_data
+)
+```
+
+The returned `result` object contains a **shuffled** prediction–outcome
+matrix. Individual predictions cannot be traced back to patient rows.
+
+### Subgroup analysis
+
+```{r}
+result_by_sex <- secure_model_validation(
+  repo_owner      = "developer-name",
+  repo_name       = "my-models",
+  model_id        = "aki_model_v1",
+  github_token    = Sys.getenv("EVALUATR_TOKEN"),
+  validation_data = my_data,
+  outcome         = "AKI",
+  by              = "sex"   # subgroup variable name
+)
+```
+
+## Step 3 — Compute performance metrics
+
+```{r}
+perf <- calculate_pmextval_metrics(
+  validation_result  = result,
+  generate_plots     = TRUE,
+  confidence_intervals = TRUE,
+  n_boot             = 500,
+  decision_threshold = 0.25
+)
+
+# View the metrics table
+perf$metrics
+
+# Access individual plots
+perf$plots$calibration
+perf$plots$decision_curve
+perf$plots$distribution
+```
+
+### Subgroup metrics
+
+```{r}
+perf_by_sex <- calculate_pmextval_metrics(
+  validation_result  = result_by_sex,
+  generate_plots     = TRUE,
+  confidence_intervals = TRUE,
+  n_boot             = 500,
+  decision_threshold = 0.25,
+  by                 = result_by_sex$shuffled_by
+)
+
+perf_by_sex$metrics   # includes a 'Subgroup' column
+```
+
+## Metrics computed
+
+| Domain | Metric |
+|--------|--------|
+| Discrimination | AUROC / c-statistic |
+| Calibration | Intercept, Slope, ICI, ECI, ECE, O:E ratio |
+| Overall | Brier score, Nagelkerke R², Cox–Snell R², McFadden R² |
+| Utility | Net benefit, Standardised net benefit |
+
+## Security notes
+
+- Model coefficients are used in-memory only and immediately cleared after
+  predictions are computed.
+- Patient data never leaves your local environment.
+- The shuffled output matrix prevents coefficient reverse-engineering.
+- A minimum of 20 observations per (sub)group is enforced.
+- The package is designed for **evaluation purposes only**, not for making
+  predictions to guide individual patient care.

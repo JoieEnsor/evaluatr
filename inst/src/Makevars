@@ -1,0 +1,7 @@
+# src/Makevars — Linux / macOS
+# Links against system libcurl for the C++ GitHub fetch function.
+# On macOS with Homebrew: brew install curl
+# On Ubuntu/Debian: sudo apt-get install libcurl4-openssl-dev
+
+PKG_LIBS = $(shell curl-config --libs)
+PKG_CPPFLAGS = $(shell curl-config --cflags)

@@ -20,6 +20,7 @@ Imports:
     curl (>= 5.0.0),
     jsonlite (>= 1.8.0),
     ggplot2 (>= 3.4.0),
+    broom,
     CalibrationCurves (>= 2.0.0),
     rmda (>= 1.6),
     rms (>= 6.0),

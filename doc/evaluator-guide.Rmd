@@ -1,0 +1,239 @@
+---
+title: "Guide for Evaluators"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Guide for Evaluators}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Overview
+
+The **evaluatr** package allows you to independently evaluate a clinical prediction model in your own dataset, without the model developer ever seeing your patient data, and without you ever seeing the model's coefficients. This guide walks you through the complete workflow from installation to performance reporting.
+
+The system works as follows. The model developer stores their model specification (coefficients and prediction code) in a private GitHub repository. You use evaluatr to retrieve those specifications and compute predictions entirely within your own R session. Your patient data never leaves your computer.
+
+## Installation
+
+```{r}
+devtools::install_github("JoieEnsor/evaluatr")
+library(evaluatr)
+```
+
+## What the developer will send you
+
+Before you can run a validation, the model developer must send you four pieces of information:
+
+1. Their **GitHub username** — identifies the account hosting the model
+2. The **repository name** — the name of the private repository
+3. The **model ID** — a short identifier matching a folder in the repository (e.g. `"aki_model_v1"`)
+4. A **time-limited access token** — a fine-grained GitHub personal access token giving read-only access to their repository
+
+Store the token securely. The recommended approach is to save it in your user-level `.Renviron` file so it is never hard-coded in a script:
+
+```{r}
+# Run once — opens your user-level .Renviron
+usethis::edit_r_environ(scope = "user")
+```
+
+Add the following line, save the file, and restart R:
+
+```
+EVALUATR_TOKEN=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
+```
+
+You can then refer to it in your scripts as `Sys.getenv("EVALUATR_TOKEN")`.
+
+---
+
+## Example 1: Basic whole-dataset evaluation
+
+This example uses the MIMIC sample dataset included with evaluatr and a publicly accessible test model to demonstrate the complete workflow.
+
+```{r}
+library(evaluatr)
+
+# Load the sample dataset included with the package
+mimic_path   <- system.file("extdata", "mimic_sample.csv", package = "evaluatr")
+mimic_sample <- read.csv(mimic_path)
+
+# Run secure validation
+# In real use, replace these with the values sent to you by the developer
+result <- secure_model_validation(
+  repo_owner      = "JoieEnsor",
+  repo_name       = "evaluatr_testing_environment",
+  model_id        = "sample_model_001",
+  github_token    = Sys.getenv("EVALUATR_TOKEN"),
+  validation_data = mimic_sample,
+  outcome         = "AKI"
+)
+```
+
+The `result` object contains a shuffled prediction–outcome matrix. The shuffling means that predictions cannot be matched back to individual patient rows, which prevents reverse-engineering of the model coefficients and ensures the package cannot be used to make predictions for individual patients in clinical practice.
+
+```{r}
+# Compute performance metrics
+performance <- eval_performance(
+  validation_result    = result,
+  generate_plots       = TRUE,
+  confidence_intervals = TRUE,
+  n_boot               = 50,        # low here for illustration purposes
+  decision_threshold   = 0.25
+)
+
+# View the metrics table
+performance$metrics
+
+# Access individual diagnostic plots
+performance$plots$calibration      # calibration plot
+performance$plots$decision_curve   # decision curve analysis
+performance$plots$distribution     # predicted probability distributions
+```
+
+The metrics table includes the following:
+
+| Domain | Metrics |
+|--------|---------|
+| Discrimination | AUROC / c-statistic |
+| Calibration | Intercept, slope, ICI, ECI, ECE, O:E ratio |
+| Overall performance | Brier score, Nagelkerke R², Cox–Snell R², McFadden R² |
+| Clinical utility | Net benefit, standardised net benefit |
+
+---
+
+## Example 2: Subgroup evaluation
+
+Many evaluation studies assess model performance separately within clinically relevant subgroups, such as sex, age group, or recruitment site. evaluatr supports this through the `by` argument.
+
+The workflow has two stages. First, pass `by` to `secure_model_validation()` so that the subgroup label is retained alongside each shuffled prediction. Second, pass `result$shuffled_by` to `eval_performance()` to obtain separate metrics per subgroup.
+
+```{r}
+# Stage 1 — run validation with subgroup labels retained
+result_by_gender <- secure_model_validation(
+  repo_owner      = "JoieEnsor",
+  repo_name       = "evaluatr_testing_environment",
+  model_id        = "sample_model_001",
+  github_token    = Sys.getenv("EVALUATR_TOKEN"),
+  validation_data = mimic_sample,
+  outcome         = "AKI",
+  by              = "gender"    # column name in your dataset
+)
+
+# Stage 2 — compute metrics separately per subgroup
+performance_by_gender <- eval_performance(
+  validation_result    = result_by_gender,
+  generate_plots       = TRUE,
+  confidence_intervals = TRUE,
+  n_boot               = 50,
+  decision_threshold   = 0.25,
+  by                   = result_by_gender$shuffled_by
+)
+
+# The metrics table now has a Subgroup column
+performance_by_gender$metrics
+
+# Plots are organised by subgroup level
+performance_by_gender$plots[["0"]]$calibration   # gender = 0
+performance_by_gender$plots[["1"]]$calibration   # gender = 1
+```
+
+Each subgroup must contain at least 50 observations. If any subgroup is smaller than this, `secure_model_validation()` will return an informative error before any predictions are computed.
+
+---
+
+## Example 3: Models requiring pre-processed variables
+
+Some models are developed using transformed variables — for example, a log-transformed creatinine or a squared term. How you handle this depends on whether the developer has embedded the transformation in their model specification.
+
+### When you need to pre-process (developer specifies transformed variable names)
+
+If the developer's model uses `log_creatinine_mean` as a predictor, you will need to create that column in your dataset before calling `secure_model_validation()`. The developer should document which transformations are required — this will be stated in their publication or communicated alongside the access token.
+
+```{r}
+# Create the required transformed variable before validation
+mimic_sample$log_creatinine_mean <- log(mimic_sample$creatinine_mean + 0.001)
+
+# Now run validation — evaluatr will find the log_creatinine_mean column
+result_preprocessed <- secure_model_validation(
+  repo_owner      = "JoieEnsor",
+  repo_name       = "evaluatr_testing_environment",
+  model_id        = "sample_model_002",
+  github_token    = Sys.getenv("EVALUATR_TOKEN"),
+  validation_data = mimic_sample,
+  outcome         = "AKI"
+)
+
+performance_preprocessed <- eval_performance(
+  validation_result    = result_preprocessed,
+  generate_plots       = TRUE,
+  confidence_intervals = TRUE,
+  n_boot               = 50,
+  decision_threshold   = 0.25
+)
+
+performance_preprocessed$metrics
+```
+
+### When the developer handles pre-processing automatically
+
+Developers can embed transformation code directly in their model specification. In this case, you provide the raw data and evaluatr handles the rest — no additional steps are required on your side.
+
+```{r}
+# No pre-processing needed — the developer's specification handles it
+result_autoprepro <- secure_model_validation(
+  repo_owner      = "JoieEnsor",
+  repo_name       = "evaluatr_testing_environment",
+  model_id        = "sample_model_003",
+  github_token    = Sys.getenv("EVALUATR_TOKEN"),
+  validation_data = mimic_sample,   # raw creatinine_mean provided as-is
+  outcome         = "AKI"
+)
+
+performance_autoprepro <- eval_performance(
+  validation_result    = result_autoprepro,
+  generate_plots       = TRUE,
+  confidence_intervals = TRUE,
+  n_boot               = 50,
+  decision_threshold   = 0.25
+)
+
+performance_autoprepro$metrics
+```
+
+The two approaches produce identical predictions because both use the same underlying model. The difference is purely in who applies the transformation.
+
+---
+
+## Minimum dataset requirements
+
+| Requirement | Value |
+|-------------|-------|
+| Minimum total observations | 50 |
+| Minimum per subgroup (when using `by`) | 50 |
+| Outcome variable | Predictions can be computed for any outcome type. Metrics utility function currently supports only binary outcome models (0/1) |
+
+These thresholds exist to prevent the package from being used to obtain predictions for individual patients, and to ensure the shuffled output matrix is effective at preventing coefficient reverse-engineering.
+
+---
+
+## Security and data privacy
+
+- **Your patient data never leaves your R session.** No data is transmitted to GitHub or to the model developer.
+- **Predictions are shuffled** before being returned, so they cannot be matched back to individual patient rows.
+- The package is designed exclusively for **retrospective evaluation studies**. It must not be used to make predictions that inform care for individual patients.
+
+---
+
+## Getting help
+
+If you encounter problems, check the following:
+
+- The token provided by the developer has not expired
+- Your dataset contains all the variable names listed in the developer's documentation
+- If using the utility function for metric computation - check the outcome variable is coded as 0/1
+
+See `?secure_model_validation` and `?eval_performance` for full argument documentation.

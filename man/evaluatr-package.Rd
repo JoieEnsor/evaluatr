@@ -41,4 +41,4 @@ Useful links:
 \author{
 \strong{Maintainer}: Joie Ensor \email{j.ensor@bham.ac.uk}
 }
-\keyword{internal}
+\keyword{package}

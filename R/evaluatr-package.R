@@ -23,7 +23,7 @@
 #'     local dataset and the developer-provided token. Predictions are
 #'     computed locally; the output is a shuffled prediction–outcome matrix
 #'     that prevents coefficient reverse-engineering.
-#'   \item The evaluator passes the result to [calculate_pmextval_metrics()]
+#'   \item The evaluator passes the result to [eval_performance()]
 #'     to obtain discrimination, calibration, and utility metrics with
 #'     optional bootstrap confidence intervals and diagnostic plots.
 #' }
@@ -40,5 +40,5 @@
 #' evaluation of clinical predictive algorithms while preserving
 #' implementation viability.* (manuscript in preparation)
 #'
-#' @keywords internal
+#' @keywords package
 "_PACKAGE"

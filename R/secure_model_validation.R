@@ -247,7 +247,8 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
   }
 
   # ---- Execute developer prediction function ----------------------------------
-  pred_env                <- new.env(parent = emptyenv())
+  # pred_env                <- new.env(parent = emptyenv())
+  pred_env <- new.env(parent = baseenv())
   pred_env$LP             <- LP
   pred_env$validation_data <- validation_data
 

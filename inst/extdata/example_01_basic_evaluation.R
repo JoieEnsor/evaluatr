@@ -43,7 +43,7 @@ mimic_result <- secure_model_validation(
 )
 
 # ---- Compute performance metrics --------------------------------------------
-performance <- calculate_pmextval_metrics(
+performance <- eval_performance(
   validation_result    = mimic_result,
   generate_plots       = TRUE,
   confidence_intervals = TRUE,

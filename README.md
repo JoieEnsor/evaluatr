@@ -51,7 +51,7 @@ result <- secure_model_validation(
 )
 
 # Step 2: Compute performance metrics
-perf <- calculate_pmextval_metrics(
+perf <- eval_performance(
   result,
   decision_threshold   = 0.2,
   confidence_intervals = TRUE,

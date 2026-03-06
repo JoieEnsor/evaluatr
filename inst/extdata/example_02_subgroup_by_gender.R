@@ -3,12 +3,12 @@
 # =============================================================================
 #
 # This script demonstrates subgroup-specific evaluation using the `by`
-# argument in both secure_model_validation() and calculate_pmextval_metrics().
+# argument in both secure_model_validation() and eval_performance().
 #
 # The workflow has two stages:
 #   Stage A — Pass `by` to secure_model_validation() so that the shuffled
 #             output retains the subgroup label alongside each prediction.
-#   Stage B — Pass result$shuffled_by to calculate_pmextval_metrics() to
+#   Stage B — Pass result$shuffled_by to eval_performance() to
 #             obtain separate performance metrics per subgroup.
 #
 # Model: AKI logistic regression (sample_model_002)
@@ -50,7 +50,7 @@ cat("\nSubgroup labels retained:", length(mimic_by_result$shuffled_by), "\n")
 cat("Unique values:", unique(mimic_by_result$shuffled_by), "\n")
 
 # ---- Stage B: metrics by subgroup -------------------------------------------
-performance_by_gender <- calculate_pmextval_metrics(
+performance_by_gender <- eval_performance(
   validation_result    = mimic_by_result,
   generate_plots       = TRUE,        # generates separate plots per subgroup
   confidence_intervals = TRUE,

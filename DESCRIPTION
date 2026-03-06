@@ -30,5 +30,6 @@ Suggests:
     knitr,
     rmarkdown
 VignetteBuilder: knitr
+Config/Needs/website: rmarkdown
 URL: https://github.com/JoieEnsor/evaluatr
 BugReports: https://github.com/JoieEnsor/evaluatr/issues

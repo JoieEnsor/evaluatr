@@ -1,5 +1,5 @@
 # evaluatr: Performance Metrics for Clinical Prediction Model Evaluation
-# v0.1.0 — adapted from pmextval_metrics v0.0.6
+# v0.1.0
 
 #' Calculate Performance Metrics from a Validation Result
 #'
@@ -50,7 +50,7 @@
 #'   validation_data = my_data, outcome = "event"
 #' )
 #'
-#' perf <- calculate_pmextval_metrics(
+#' perf <- eval_performance(
 #'   result, n_boot = 200, decision_threshold = 0.1
 #' )
 #' perf$metrics
@@ -58,10 +58,10 @@
 #'
 #' @seealso [secure_model_validation()]
 #' @export
-calculate_pmextval_metrics <- function(validation_result,
+eval_performance <- function(validation_result,
                                        generate_plots = TRUE,
                                        confidence_intervals = TRUE,
-                                       n_boot = 1000,
+                                       n_boot = 200,
                                        plot_title = NULL,
                                        decision_threshold = 0.1,
                                        by = NULL) {

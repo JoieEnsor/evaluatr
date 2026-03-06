@@ -136,7 +136,7 @@
 #' )
 #' }
 #'
-#' @seealso [calculate_pmextval_metrics()] for computing performance metrics
+#' @seealso [eval_performance()] for computing performance metrics
 #'   from the returned object.
 #'
 #' @export

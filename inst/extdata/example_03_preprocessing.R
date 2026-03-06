@@ -72,7 +72,7 @@ cat("  creatinine_sq:  range [",
 #   validation_data = mimic_processed,
 #   outcome         = "AKI"
 # )
-# performance_processed <- calculate_pmextval_metrics(
+# performance_processed <- eval_performance(
 #   result_processed, n_boot = 50, decision_threshold = 0.25
 # )
 # performance_processed$metrics
@@ -94,7 +94,7 @@ result_standard <- secure_model_validation(
   outcome         = "AKI"
 )
 
-performance_standard <- calculate_pmextval_metrics(
+performance_standard <- eval_performance(
   validation_result    = result_standard,
   generate_plots       = TRUE,
   confidence_intervals = TRUE,

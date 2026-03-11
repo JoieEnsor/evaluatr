@@ -197,7 +197,7 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
 
   # ---- Reconstruct model object -----------------------------------------------
   coefficients_data <- raw_result$coefficients_json
-  metadata          <- raw_result$metadata_json_json
+  metadata          <- raw_result$metadata_json
 
   model_data <- list(
     model_type          = metadata$outcome_type %||% "unknown",

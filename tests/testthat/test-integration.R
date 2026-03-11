@@ -11,21 +11,24 @@ make_well_calibrated_result <- function(n = 500, seed = 2648) {
 
   p <- plogis(lp)
 
-  list(
-    shuffled_outcome_predictions = cbind(outcome = y, prediction = p),
-    shuffled_outcomes            = y,
-    shuffled_predictions         = p,
-    prediction_matrix            = matrix(p, ncol = 1),
-    model_info = list(
-      model_id             = "well_calibrated",
-      model_name           = "Well-Calibrated Test",
-      model_type           = "binary",
-      version              = "1.0",
-      required_variables   = "x",
-      n_predictions        = n,
-      prediction_columns   = NULL,
-      validation_timestamp = Sys.time()
-    )
+  structure(
+    list(
+      shuffled_outcome_predictions = cbind(outcome = y, prediction = p),
+      shuffled_outcomes            = y,
+      shuffled_predictions         = p,
+      prediction_matrix            = matrix(p, ncol = 1),
+      model_info = list(
+        model_id             = "well_calibrated",
+        model_name           = "Well-Calibrated Test",
+        model_type           = "binary",
+        version              = "1.0",
+        required_variables   = "x",
+        n_predictions        = n,
+        prediction_columns   = NULL,
+        validation_timestamp = Sys.time()
+      )
+    ),
+    class = "evaluatr_result"
   )
 }
 
@@ -37,21 +40,24 @@ make_miscalibrated_result <- function(n = 500, seed = 9174) {
   # Shift and shrink the LP to create miscalibration
   p <- plogis(0.5 + 0.3 * lp_true)
 
-  list(
-    shuffled_outcome_predictions = cbind(outcome = y, prediction = p),
-    shuffled_outcomes            = y,
-    shuffled_predictions         = p,
-    prediction_matrix            = matrix(p, ncol = 1),
-    model_info = list(
-      model_id             = "miscalibrated",
-      model_name           = "Miscalibrated Test",
-      model_type           = "binary",
-      version              = "1.0",
-      required_variables   = "x",
-      n_predictions        = n,
-      prediction_columns   = NULL,
-      validation_timestamp = Sys.time()
-    )
+  structure(
+    list(
+      shuffled_outcome_predictions = cbind(outcome = y, prediction = p),
+      shuffled_outcomes            = y,
+      shuffled_predictions         = p,
+      prediction_matrix            = matrix(p, ncol = 1),
+      model_info = list(
+        model_id             = "miscalibrated",
+        model_name           = "Miscalibrated Test",
+        model_type           = "binary",
+        version              = "1.0",
+        required_variables   = "x",
+        n_predictions        = n,
+        prediction_columns   = NULL,
+        validation_timestamp = Sys.time()
+      )
+    ),
+    class = "evaluatr_result"
   )
 }
 
@@ -107,17 +113,20 @@ test_that("uninformative model has AUROC near 0.5", {
   p <- rep(mean(y), n) + runif(n, -0.01, 0.01)
   p <- pmin(pmax(p, 0.001), 0.999)
 
-  res <- list(
-    shuffled_outcome_predictions = cbind(outcome = y, prediction = p),
-    shuffled_outcomes            = y,
-    shuffled_predictions         = p,
-    prediction_matrix            = matrix(p, ncol = 1),
-    model_info = list(
-      model_id = "null_model", model_name = "Null",
-      model_type = "binary", version = "1.0",
-      required_variables = character(0), n_predictions = n,
-      prediction_columns = NULL, validation_timestamp = Sys.time()
-    )
+  res <- structure(
+    list(
+      shuffled_outcome_predictions = cbind(outcome = y, prediction = p),
+      shuffled_outcomes            = y,
+      shuffled_predictions         = p,
+      prediction_matrix            = matrix(p, ncol = 1),
+      model_info = list(
+        model_id = "null_model", model_name = "Null",
+        model_type = "binary", version = "1.0",
+        required_variables = character(0), n_predictions = n,
+        prediction_columns = NULL, validation_timestamp = Sys.time()
+      )
+    ),
+    class = "evaluatr_result"
   )
 
   perf <- eval_performance(res, generate_plots = FALSE,
@@ -144,17 +153,20 @@ test_that("subgroup analysis metrics differ across groups with different data", 
   p <- c(p_a, p_b)
   by_vec <- c(rep("good_model", 150), rep("bad_model", 150))
 
-  res <- list(
-    shuffled_outcome_predictions = cbind(outcome = y, prediction = p),
-    shuffled_outcomes            = y,
-    shuffled_predictions         = p,
-    prediction_matrix            = matrix(p, ncol = 1),
-    model_info = list(
-      model_id = "subgroup_test", model_name = "Subgroup Test",
-      model_type = "binary", version = "1.0",
-      required_variables = "x", n_predictions = n,
-      prediction_columns = NULL, validation_timestamp = Sys.time()
-    )
+  res <- structure(
+    list(
+      shuffled_outcome_predictions = cbind(outcome = y, prediction = p),
+      shuffled_outcomes            = y,
+      shuffled_predictions         = p,
+      prediction_matrix            = matrix(p, ncol = 1),
+      model_info = list(
+        model_id = "subgroup_test", model_name = "Subgroup Test",
+        model_type = "binary", version = "1.0",
+        required_variables = "x", n_predictions = n,
+        prediction_columns = NULL, validation_timestamp = Sys.time()
+      )
+    ),
+    class = "evaluatr_result"
   )
 
   perf <- eval_performance(res, generate_plots = FALSE,

@@ -6,21 +6,24 @@ make_mock_result <- function(n = 100, seed = 7381) {
   outcomes    <- rbinom(n, 1, 0.3)
   predictions <- plogis(rnorm(n, ifelse(outcomes == 1, 1, -1), 1))
 
-  list(
-    shuffled_outcome_predictions = cbind(outcome = outcomes, prediction = predictions),
-    shuffled_outcomes            = outcomes,
-    shuffled_predictions         = predictions,
-    prediction_matrix            = matrix(predictions, ncol = 1),
-    model_info = list(
-      model_id             = "test_model",
-      model_name           = "Test Model",
-      model_type           = "binary",
-      version              = "1.0",
-      required_variables   = c("x1", "x2"),
-      n_predictions        = n,
-      prediction_columns   = NULL,
-      validation_timestamp = Sys.time()
-    )
+  structure(
+    list(
+      shuffled_outcome_predictions = cbind(outcome = outcomes, prediction = predictions),
+      shuffled_outcomes            = outcomes,
+      shuffled_predictions         = predictions,
+      prediction_matrix            = matrix(predictions, ncol = 1),
+      model_info = list(
+        model_id             = "test_model",
+        model_name           = "Test Model",
+        model_type           = "binary",
+        version              = "1.0",
+        required_variables   = c("x1", "x2"),
+        n_predictions        = n,
+        prediction_columns   = NULL,
+        validation_timestamp = Sys.time()
+      )
+    ),
+    class = "evaluatr_result"
   )
 }
 

@@ -67,8 +67,7 @@ eval_performance <- function(validation_result,
                                        by = NULL) {
 
   # ---- Input validation -------------------------------------------------------
-  if (!is.list(validation_result) ||
-      !"shuffled_outcome_predictions" %in% names(validation_result)) {
+  if (!inherits(validation_result, "evaluatr_result")) {
     stop("'validation_result' must be the output of secure_model_validation().")
   }
 

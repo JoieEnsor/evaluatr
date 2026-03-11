@@ -4,7 +4,7 @@
 #' Calculate Performance Metrics from a Validation Result
 #'
 #' Computes a comprehensive set of discrimination, calibration, and utility
-#' performance metrics from the shuffled prediction–outcome matrix returned
+#' performance metrics from the shuffled prediction-outcome matrix returned
 #' by [secure_model_validation()]. Optionally generates diagnostic plots and
 #' bootstrap confidence intervals.
 #'
@@ -36,8 +36,8 @@
 #'
 #' @details
 #' Metrics computed include: AUROC/c-statistic, calibration intercept,
-#' calibration slope, ECI, ICI, ECE, O:E ratio, Brier score, Nagelkerke R²,
-#' Cox–Snell R², McFadden R², net benefit, and standardised net benefit.
+#' calibration slope, ECI, ICI, ECE, O:E ratio, Brier score, Nagelkerke R-squared,
+#' Cox-Snell R-squared, McFadden R-squared, net benefit, and standardised net benefit.
 #'
 #' This function currently supports binary outcomes only (0/1). Multinomial
 #' support is planned for a future release.
@@ -112,7 +112,7 @@ eval_performance <- function(validation_result,
         stop("Subgroup '", cat_name, "' has fewer than 10 observations.")
       }
       if (length(unique(cat_out)) < 2) {
-        warning("Subgroup '", cat_name, "' has no variation in outcomes — skipping.")
+        warning("Subgroup '", cat_name, "' has no variation in outcomes -- skipping.")
         next
       }
 
@@ -124,7 +124,7 @@ eval_performance <- function(validation_result,
         n_boot               = n_boot,
         decision_threshold   = decision_threshold,
         generate_plots       = generate_plots,
-        plot_title           = paste0(if (!is.null(plot_title)) paste0(plot_title, " — "),
+        plot_title           = paste0(if (!is.null(plot_title)) paste0(plot_title, " -- "),
                                      "Subgroup: ", cat_name)
       )
       all_results[[cat_name]] <- cat_result$metrics
@@ -185,7 +185,7 @@ eval_performance <- function(validation_result,
 .print_metrics_header <- function(validation_result, decision_threshold,
                                   subgroup = FALSE, n_groups = NULL) {
   cat("\n=== evaluatr performance metrics",
-      if (subgroup) "— subgroup analysis" else "", "===\n")
+      if (subgroup) "-- subgroup analysis" else "", "===\n")
   cat("Model ID:          ", validation_result$model_info$model_id, "\n")
   cat("N predictions:     ", validation_result$model_info$n_predictions, "\n")
   cat("Decision threshold:", decision_threshold, "\n")
@@ -310,7 +310,7 @@ eval_performance <- function(validation_result,
         xlab         = "Predicted probability",
         ylab         = "Observed probability",
         main         = paste0("Calibration Plot",
-                              if (!is.null(plot_title)) paste0(" — ", plot_title)),
+                              if (!is.null(plot_title)) paste0(" -- ", plot_title)),
         cex.lab      = 1.2
       )
       "Calibration plot generated"
@@ -344,7 +344,7 @@ eval_performance <- function(validation_result,
         ggplot2::labs(
           x = "Outcome", y = "Predicted probability",
           title = paste0("Predicted Probability Distribution",
-                         if (!is.null(plot_title)) paste0(" — ", plot_title))
+                         if (!is.null(plot_title)) paste0(" -- ", plot_title))
         ) +
         ggplot2::theme_classic() +
         ggplot2::theme(

@@ -1,5 +1,5 @@
 # evaluatr: Secure Independent Evaluation of Clinical Prediction Models
-# Core validation function — v0.1.0
+# Core validation function -- v0.1.0
 #
 # GitHub fetch currently uses the pure-R curl implementation.
 # The C++ libcurl version is preserved in inst/src/ for a future release
@@ -86,7 +86,7 @@
 #'
 #' @return A named list containing:
 #' \describe{
-#'   \item{`shuffled_outcome_predictions`}{Matrix of shuffled outcome–prediction
+#'   \item{`shuffled_outcome_predictions`}{Matrix of shuffled outcome-prediction
 #'     pairs (and subgroup column if `by` is specified).}
 #'   \item{`shuffled_outcomes`}{Numeric vector of shuffled outcomes.}
 #'   \item{`shuffled_predictions`}{Numeric vector of shuffled predicted
@@ -353,7 +353,7 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
 
   model_data <- NULL
 
-  message("Validation complete — model: ", model_id,
+  message("Validation complete -- model: ", model_id,
           " | N = ", nrow(predictions),
           " | Variables: ", paste(required_vars, collapse = ", "))
   if (!is.null(by)) {

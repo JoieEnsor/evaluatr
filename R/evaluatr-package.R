@@ -6,11 +6,11 @@
 #' designed to simultaneously satisfy:
 #'
 #' \itemize{
-#'   \item **Scientific rigour** — fully independent evaluators with
+#'   \item **Scientific rigour** -- fully independent evaluators with
 #'     complete control over their data and reporting.
-#'   \item **Commercial viability** — model coefficients never leave the
+#'   \item **Commercial viability** -- model coefficients never leave the
 #'     developer's private GitHub repository.
-#'   \item **Data sovereignty** — patient data never leaves the evaluator's
+#'   \item **Data sovereignty** -- patient data never leaves the evaluator's
 #'     secure local environment.
 #' }
 #'
@@ -21,7 +21,7 @@
 #'     issues a time-limited fine-grained access token to the evaluator.
 #'   \item The **evaluator** calls [secure_model_validation()] with their
 #'     local dataset and the developer-provided token. Predictions are
-#'     computed locally; the output is a shuffled prediction–outcome matrix
+#'     computed locally; the output is a shuffled prediction-outcome matrix
 #'     that prevents coefficient reverse-engineering.
 #'   \item The evaluator passes the result to [eval_performance()]
 #'     to obtain discrimination, calibration, and utility metrics with
@@ -42,3 +42,7 @@
 #'
 #' @keywords package
 "_PACKAGE"
+
+# Suppress R CMD check NOTEs for non-standard evaluation in ggplot2 aes() and
+# rmda formula interfaces
+utils::globalVariables(c("outcome", "prediction"))

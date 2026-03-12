@@ -1,5 +1,5 @@
 # evaluatr: Secure Independent Evaluation of Clinical Prediction Models
-# Core validation function — v0.1.0
+# Core validation function -- v0.1.0
 #
 # GitHub fetch currently uses the pure-R curl implementation.
 # The C++ libcurl version is preserved in inst/src/ for a future release
@@ -86,7 +86,7 @@
 #'
 #' @return A named list containing:
 #' \describe{
-#'   \item{`shuffled_outcome_predictions`}{Matrix of shuffled outcome–prediction
+#'   \item{`shuffled_outcome_predictions`}{Matrix of shuffled outcome-prediction
 #'     pairs (and subgroup column if `by` is specified).}
 #'   \item{`shuffled_outcomes`}{Numeric vector of shuffled outcomes.}
 #'   \item{`shuffled_predictions`}{Numeric vector of shuffled predicted
@@ -197,7 +197,7 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
 
   # ---- Reconstruct model object -----------------------------------------------
   coefficients_data <- raw_result$coefficients_json
-  metadata          <- raw_result$metadata_json_json
+  metadata          <- raw_result$metadata_json
 
   model_data <- list(
     model_type          = metadata$outcome_type %||% "unknown",
@@ -296,22 +296,25 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
     shuffled_indices <- sample(nrow(outcome_pred_matrix))
     shuffled_matrix  <- outcome_pred_matrix[shuffled_indices, ]
 
-    result <- list(
-      shuffled_outcome_predictions = shuffled_matrix,
-      shuffled_outcomes            = shuffled_matrix[, 1],
-      shuffled_predictions         = shuffled_matrix[, 2],
-      prediction_matrix            = predictions[shuffled_indices, , drop = FALSE],
-      model_info = list(
-        model_id           = model_id,
-        model_name         = model_data$metadata$model_name,
-        model_type         = model_data$model_type,
-        version            = model_data$metadata$version,
-        required_variables = required_vars,
-        by_variable        = by,
-        n_predictions      = length(pred_vector),
-        prediction_columns = colnames(predictions),
-        validation_timestamp = Sys.time()
-      )
+    result <- structure(
+      list(
+        shuffled_outcome_predictions = shuffled_matrix,
+        shuffled_outcomes            = shuffled_matrix[, 1],
+        shuffled_predictions         = shuffled_matrix[, 2],
+        prediction_matrix            = predictions[shuffled_indices, , drop = FALSE],
+        model_info = list(
+          model_id           = model_id,
+          model_name         = model_data$metadata$model_name,
+          model_type         = model_data$model_type,
+          version            = model_data$metadata$version,
+          required_variables = required_vars,
+          by_variable        = by,
+          n_predictions      = length(pred_vector),
+          prediction_columns = colnames(predictions),
+          validation_timestamp = Sys.time()
+        )
+      ),
+      class = "evaluatr_result"
     )
     if (!is.null(by)) result$shuffled_by <- shuffled_matrix[, 3]
 
@@ -332,33 +335,36 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
     shuffled_predictions_matrix <- shuffled_matrix[,
       pred_start_col:ncol(shuffled_matrix), drop = FALSE]
 
-    result <- list(
-      shuffled_outcomes   = shuffled_matrix[, 1],
-      prediction_matrix   = shuffled_predictions_matrix,
-      full_shuffled_matrix = shuffled_matrix,
-      model_info = list(
-        model_id           = model_id,
-        model_name         = model_data$metadata$model_name,
-        model_type         = model_data$model_type,
-        version            = model_data$metadata$version,
-        required_variables = required_vars,
-        by_variable        = by,
-        n_predictions      = nrow(predictions),
-        prediction_columns = colnames(predictions),
-        validation_timestamp = Sys.time()
-      )
+    result <- structure(
+      list(
+        shuffled_outcomes   = shuffled_matrix[, 1],
+        prediction_matrix   = shuffled_predictions_matrix,
+        full_shuffled_matrix = shuffled_matrix,
+        model_info = list(
+          model_id           = model_id,
+          model_name         = model_data$metadata$model_name,
+          model_type         = model_data$model_type,
+          version            = model_data$metadata$version,
+          required_variables = required_vars,
+          by_variable        = by,
+          n_predictions      = nrow(predictions),
+          prediction_columns = colnames(predictions),
+          validation_timestamp = Sys.time()
+        )
+      ),
+      class = "evaluatr_result"
     )
     if (!is.null(by)) result$shuffled_by <- shuffled_matrix[, 2]
   }
 
   model_data <- NULL
 
-  message("Validation complete — model: ", model_id,
+  message("Validation complete -- model: ", model_id,
           " | N = ", nrow(predictions),
           " | Variables: ", paste(required_vars, collapse = ", "))
   if (!is.null(by)) {
     message("Subgroup variable '", by, "' included in output.")
   }
 
-  result
+  return(result)
 }

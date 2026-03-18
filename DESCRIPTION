@@ -13,7 +13,7 @@ Description: Provides a two-component system for independent evaluation of clini
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Depends:
     R (>= 4.1.0)
 Imports:
@@ -23,7 +23,10 @@ Imports:
     CalibrationCurves (>= 2.0.0),
     rmda (>= 1.6),
     rms (>= 6.0),
-    ResourceSelection (>= 0.3)
+    ResourceSelection (>= 0.3),
+    Rcpp (>= 1.0.0)
+LinkingTo:
+    Rcpp
 Suggests:
     pROC,
     testthat (>= 3.0.0),

@@ -30,4 +30,4 @@
 #' mimic_path <- system.file("extdata", "mimic_sample.csv", package = "evaluatr")
 #' mimic_sample <- read.csv(mimic_path)
 #' head(mimic_sample)
-"mimic_sample"
+# "mimic_sample"

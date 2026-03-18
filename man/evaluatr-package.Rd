@@ -6,30 +6,48 @@
 \alias{evaluatr-package}
 \title{evaluatr: Secure Independent Evaluation of Clinical Prediction Models}
 \description{
-Provides a two-component system for independent evaluation of clinical
-prediction models while preserving commercial viability and data sovereignty.
-Evaluators retrieve model specifications from a developer's private GitHub
-repository and compute predictions locally, without exposing model
-coefficients or transmitting patient data.
-}
-\details{
-The main functions are:
+The \pkg{evaluatr} package implements a two-component system for
+independent external validation of clinical prediction algorithms,
+designed to simultaneously satisfy:
+
 \itemize{
-\item \code{\link{secure_model_validation}} — retrieves the model and computes
-  shuffled predictions on the evaluator's local dataset.
-\item \code{\link{eval_performance}} — computes discrimination,
-  calibration, and utility metrics with optional bootstrap confidence
-  intervals and diagnostic plots.
+\item \strong{Scientific rigour} -- fully independent evaluators with
+complete control over their data and reporting.
+\item \strong{Commercial viability} -- model coefficients never leave the
+developer's private GitHub repository.
+\item \strong{Data sovereignty} -- patient data never leaves the evaluator's
+secure local environment.
+}
+}
+\section{Workflow}{
+
+\enumerate{
+\item The model \strong{developer} uploads a JSON specification
+(coefficients + prediction code) to a private GitHub repository and
+issues a time-limited fine-grained access token to the evaluator.
+\item The \strong{evaluator} calls \code{\link[=secure_model_validation]{secure_model_validation()}} with their
+local dataset and the developer-provided token. Predictions are
+computed locally; the output is a shuffled prediction-outcome matrix
+that prevents coefficient reverse-engineering.
+\item The evaluator passes the result to \code{\link[=eval_performance]{eval_performance()}}
+to obtain discrimination, calibration, and utility metrics with
+optional bootstrap confidence intervals and diagnostic plots.
+}
 }
 
-See \code{vignette("evaluator-guide", package = "evaluatr")} for a complete
-walkthrough for evaluators, and \code{vignette("developer-guide", package = "evaluatr")}
-for instructions on setting up a model for evaluation.
+\section{Security}{
+
+Model coefficients are retrieved from GitHub, used to compute predictions,
+then immediately cleared from memory. The returned matrix is row-shuffled
+so that predictions cannot be matched back to individual patient records.
+A minimum dataset size of 20 observations (per subgroup) is enforced to
+prevent both near-individual prediction and coefficient reverse-engineering.
 }
+
 \references{
-Ensor J, Van Calster B, Wynants L, Perry BI.
-\emph{A system for independent evaluation of clinical predictive algorithms
-while preserving implementation viability.} (manuscript in preparation)
+Ensor J, Van Calster B, Wynants L, Perry BI. \emph{A system for independent
+evaluation of clinical predictive algorithms while preserving
+implementation viability.} (manuscript in preparation)
 }
 \seealso{
 Useful links:
@@ -37,8 +55,10 @@ Useful links:
   \item \url{https://github.com/JoieEnsor/evaluatr}
   \item Report bugs at \url{https://github.com/JoieEnsor/evaluatr/issues}
 }
+
 }
 \author{
 \strong{Maintainer}: Joie Ensor \email{j.ensor@bham.ac.uk}
+
 }
 \keyword{package}

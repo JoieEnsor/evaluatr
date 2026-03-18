@@ -22,7 +22,7 @@ model repository.}
 model specification.}
 
 \item{model_id}{Character. Unique identifier for the model (must match the
-folder name under \code{models/} in the repository).}
+folder name under \verb{models/} in the repository).}
 
 \item{github_token}{Character. Fine-grained GitHub personal access token
 with read access to the repository. Provided by the model developer.}
@@ -76,27 +76,28 @@ computed.
 \dontrun{
 # Basic usage with a binary outcome model
 result <- secure_model_validation(
-  repo_owner      = "developer-username",
-  repo_name       = "my-models",
-  model_id        = "sample_model_001",
-  github_token    = Sys.getenv("GITHUB_PAT"),
+  repo_owner    = "developer-username",
+  repo_name     = "my-models",
+  model_id      = "sample_model_001",
+  github_token  = Sys.getenv("GITHUB_PAT"),
   validation_data = my_data,
-  outcome         = "event"
+  outcome       = "event"
 )
 
 # Subgroup analysis by sex
 result_by_sex <- secure_model_validation(
-  repo_owner      = "developer-username",
-  repo_name       = "my-models",
-  model_id        = "sample_model_001",
-  github_token    = Sys.getenv("GITHUB_PAT"),
+  repo_owner    = "developer-username",
+  repo_name     = "my-models",
+  model_id      = "sample_model_001",
+  github_token  = Sys.getenv("GITHUB_PAT"),
   validation_data = my_data,
-  outcome         = "event",
-  by              = "sex"
+  outcome       = "event",
+  by            = "sex"
 )
 }
+
 }
 \seealso{
-\code{\link{eval_performance}} for computing performance metrics
+\code{\link[=eval_performance]{eval_performance()}} for computing performance metrics
 from the returned object.
 }

@@ -32,27 +32,22 @@
 
     api_response <- jsonlite::fromJSON(rawToChar(response$content))
 
-    decoded_json <- if (api_response$encoding == "base64") {
-      rawToChar(jsonlite::base64_dec(api_response$content))
-    } else {
-      api_response$content
-    }
+    # Return the raw base64 content for the C++ engine.
+    # The GitHub Contents API always returns base64-encoded content; we pass
+    # it directly to .predict_secure() which decodes, de-obfuscates, predicts,
+    # shuffles, and wipes coefficients entirely inside C++.
+    encoded_content <- api_response$content
 
-    model_json <- jsonlite::fromJSON(decoded_json)
-
-    if (is.null(model_json$coefficients) ||
-        is.null(model_json$prediction_function) ||
-        is.null(model_json$metadata)) {
-      return(list(error = "Missing required fields in model JSON",
+    # Quick sanity check: the content field must be present
+    if (is.null(encoded_content) || !nzchar(trimws(encoded_content))) {
+      return(list(error = "Missing or empty content field in GitHub API response",
                   http_status = response$status_code))
     }
 
     list(
-      coefficients_json   = model_json$coefficients,
-      prediction_function = model_json$prediction_function,
-      metadata_json       = model_json$metadata,
-      http_status         = response$status_code,
-      success             = TRUE
+      encoded_content = encoded_content,
+      http_status     = response$status_code,
+      success         = TRUE
     )
 
   }, error = function(e) {
@@ -195,176 +190,17 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
     stop(raw_result$error)
   }
 
-  # ---- Reconstruct model object -----------------------------------------------
-  coefficients_data <- raw_result$coefficients_json
-  metadata          <- raw_result$metadata_json
-
-  model_data <- list(
-    model_type          = metadata$outcome_type %||% "unknown",
-    coefficients        = coefficients_data,
-    prediction_function = raw_result$prediction_function,
-    metadata            = metadata,
-    required_packages   = metadata$required_packages %||% NULL,
-    model_parameters    = metadata$model_parameters  %||% NULL,
-    baseline_survival   = metadata$baseline_survival  %||% NULL
+  # ---- Delegate to C++ secure prediction engine ------------------------------
+  # .predict_secure() decodes the base64 JSON, de-obfuscates coefficients,
+  # computes predictions, shuffles, and wipes all coefficient data inside C++.
+  # Coefficients never exist as readable R objects.
+  result <- .predict_secure(
+    encoded_content = raw_result$encoded_content,
+    validation_data = validation_data,
+    outcome         = outcome,
+    by              = by,
+    model_id        = model_id
   )
-
-  # ---- Install any developer-specified packages -------------------------------
-  if (!is.null(model_data$required_packages) &&
-      length(model_data$required_packages) > 0) {
-    for (pkg in model_data$required_packages) {
-      if (!requireNamespace(pkg, quietly = TRUE)) {
-        message("Installing required package: ", pkg)
-        utils::install.packages(pkg, quiet = TRUE)
-      }
-    }
-  }
-
-  # ---- Identify required variables --------------------------------------------
-  coeffs <- model_data$coefficients
-
-  required_vars <- if (!is.null(model_data$metadata$variables)) {
-    model_data$metadata$variables
-  } else {
-    names(coeffs)[names(coeffs) != "(Intercept)"]
-  }
-
-  missing_vars <- setdiff(required_vars, names(validation_data))
-  if (length(missing_vars) > 0) {
-    stop("Missing required variables in validation_data: ",
-         paste(missing_vars, collapse = ", "))
-  }
-
-  # ---- Compute linear predictor (LP) ------------------------------------------
-  LP <- rep(0, nrow(validation_data))
-  if ("(Intercept)" %in% names(coeffs)) {
-    LP <- LP + coeffs[["(Intercept)"]]
-  }
-  if (model_data$model_type != "multinomial") {
-    for (var in required_vars) {
-      LP <- LP + coeffs[[var]] * validation_data[[var]]
-    }
-  }
-
-  # ---- Execute developer prediction function ----------------------------------
-  # pred_env                <- new.env(parent = emptyenv())
-  pred_env <- new.env(parent = baseenv())
-  pred_env$LP             <- LP
-  pred_env$validation_data <- validation_data
-
-  for (coeff_name in names(coeffs)) {
-    pred_env[[coeff_name]] <- coeffs[[coeff_name]]
-  }
-  if (!is.null(model_data$model_parameters)) {
-    for (param_name in names(model_data$model_parameters)) {
-      pred_env[[param_name]] <- model_data$model_parameters[[param_name]]
-    }
-  }
-  if (!is.null(model_data$baseline_survival)) {
-    pred_env$timepoints     <- model_data$baseline_survival$timepoints
-    pred_env$survival_probs <- model_data$baseline_survival$survival_probs
-  }
-
-  predictions <- tryCatch(
-    eval(parse(text = model_data$prediction_function), envir = pred_env),
-    error = function(e) stop("Error in prediction function: ", e$message)
-  )
-
-  if (!is.matrix(predictions)) predictions <- as.matrix(predictions)
-
-  # ---- Clear sensitive data from memory ---------------------------------------
-  coeffs                      <- NULL
-  model_data$coefficients     <- NULL
-  model_data$model_parameters <- NULL
-  model_data$prediction_function <- NULL
-  pred_env                    <- NULL
-
-  # ---- Build shuffled output --------------------------------------------------
-  if (ncol(predictions) == 1) {
-    # Binary / continuous outcome
-    pred_vector <- predictions[, 1]
-
-    outcome_pred_matrix <- if (!is.null(by)) {
-      cbind(outcome    = validation_data[[outcome]],
-            prediction = pred_vector,
-            by         = validation_data[[by]])
-    } else {
-      cbind(outcome    = validation_data[[outcome]],
-            prediction = pred_vector)
-    }
-
-    shuffled_indices <- sample(nrow(outcome_pred_matrix))
-    shuffled_matrix  <- outcome_pred_matrix[shuffled_indices, ]
-
-    result <- structure(
-      list(
-        shuffled_outcome_predictions = shuffled_matrix,
-        shuffled_outcomes            = shuffled_matrix[, 1],
-        shuffled_predictions         = shuffled_matrix[, 2],
-        prediction_matrix            = predictions[shuffled_indices, , drop = FALSE],
-        model_info = list(
-          model_id           = model_id,
-          model_name         = model_data$metadata$model_name,
-          model_type         = model_data$model_type,
-          version            = model_data$metadata$version,
-          required_variables = required_vars,
-          by_variable        = by,
-          n_predictions      = length(pred_vector),
-          prediction_columns = colnames(predictions),
-          validation_timestamp = Sys.time()
-        )
-      ),
-      class = "evaluatr_result"
-    )
-    if (!is.null(by)) result$shuffled_by <- shuffled_matrix[, 3]
-
-  } else {
-    # Multinomial outcome
-    base_matrix <- if (!is.null(by)) {
-      cbind(outcome = validation_data[[outcome]],
-            by      = validation_data[[by]])
-    } else {
-      cbind(outcome = validation_data[[outcome]])
-    }
-
-    full_matrix      <- cbind(base_matrix, predictions)
-    shuffled_indices <- sample(nrow(full_matrix))
-    shuffled_matrix  <- full_matrix[shuffled_indices, ]
-
-    pred_start_col             <- ncol(base_matrix) + 1
-    shuffled_predictions_matrix <- shuffled_matrix[,
-      pred_start_col:ncol(shuffled_matrix), drop = FALSE]
-
-    result <- structure(
-      list(
-        shuffled_outcomes   = shuffled_matrix[, 1],
-        prediction_matrix   = shuffled_predictions_matrix,
-        full_shuffled_matrix = shuffled_matrix,
-        model_info = list(
-          model_id           = model_id,
-          model_name         = model_data$metadata$model_name,
-          model_type         = model_data$model_type,
-          version            = model_data$metadata$version,
-          required_variables = required_vars,
-          by_variable        = by,
-          n_predictions      = nrow(predictions),
-          prediction_columns = colnames(predictions),
-          validation_timestamp = Sys.time()
-        )
-      ),
-      class = "evaluatr_result"
-    )
-    if (!is.null(by)) result$shuffled_by <- shuffled_matrix[, 2]
-  }
-
-  model_data <- NULL
-
-  message("Validation complete -- model: ", model_id,
-          " | N = ", nrow(predictions),
-          " | Variables: ", paste(required_vars, collapse = ", "))
-  if (!is.null(by)) {
-    message("Subgroup variable '", by, "' included in output.")
-  }
 
   return(result)
 }

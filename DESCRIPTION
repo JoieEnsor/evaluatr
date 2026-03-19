@@ -31,7 +31,9 @@ Suggests:
     pROC,
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    nnet,
+    survival
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Config/Needs/website: rmarkdown

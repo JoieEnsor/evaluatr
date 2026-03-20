@@ -290,6 +290,8 @@
 #'   One of `"logistic"`, `"cox"`, `"weibull"`, `"multinomial"`.
 #' @param model_id Character. Unique identifier for this model (required).
 #'   Must match the folder name in the GitHub repository (e.g. `"aki_v1"`).
+#' @param developer_id Character. Your identifier (e.g. GitHub username). Used
+#'   to attribute the model in the evaluatr key service registry (required).
 #' @param model_name Character. Human-readable name (required).
 #' @param outcome_type Character. One of `"binary"`, `"survival"`,
 #'   `"multinomial"`. Required when `coefficients` is supplied; inferred
@@ -387,6 +389,7 @@ generate_model_json <- function(
     coefficients       = NULL,
     model_type         = NULL,
     model_id           = NULL,
+    developer_id       = NULL,
     model_name         = NULL,
     outcome_type       = NULL,
     variables          = NULL,
@@ -402,6 +405,10 @@ generate_model_json <- function(
   # ---- Input validation -------------------------------------------------------
   if (is.null(model_id) || !nzchar(trimws(model_id))) {
     stop("model_id is required and must be a non-empty string")
+  }
+  if (is.null(developer_id) || !nzchar(trimws(developer_id))) {
+    stop("developer_id is required and must be a non-empty string ",
+         "(e.g. your GitHub username)")
   }
   if (is.null(model_name) || !nzchar(trimws(model_name))) {
     stop("model_name is required and must be a non-empty string")
@@ -515,6 +522,15 @@ generate_model_json <- function(
   # ---- Validate ---------------------------------------------------------------
   .validate_json_structure(json_list)
 
+  # ---- Phase 3a: Register model with key service -----------------------------
+  # This is a mandatory chokepoint: every model registration is logged.
+  # The returned encryption_key is not yet used for encryption (Phase 3b).
+  registration <- .register_model_with_key_service(
+    model_id     = model_id,
+    developer_id = developer_id,
+    model_name   = model_name
+  )
+
   # ---- Write to file ----------------------------------------------------------
   filename <- output_filename %||% "coefficients.json"
   if (!dir.exists(output_dir)) {
@@ -537,8 +553,10 @@ generate_model_json <- function(
   }
 
   message("evaluatr: model JSON written to '", output_path, "'")
-  message("  model_id    : ", model_id)
-  message("  model_type  : ", model_type)
+  message("  model_id     : ", model_id)
+  message("  developer_id : ", developer_id)
+  message("  registered_at: ", registration$registered_at)
+  message("  model_type   : ", model_type)
   message("  n_coeffs    : ", n_coeffs,
           if (model_type == "multinomial")
             paste0(" (across ", length(raw_coefficients), " non-reference categories)")

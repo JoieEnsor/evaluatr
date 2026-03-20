@@ -9,6 +9,7 @@ generate_model_json(
   coefficients = NULL,
   model_type = NULL,
   model_id = NULL,
+  developer_id = NULL,
   model_name = NULL,
   outcome_type = NULL,
   variables = NULL,
@@ -35,6 +36,9 @@ One of \code{"logistic"}, \code{"cox"}, \code{"weibull"}, \code{"multinomial"}.}
 
 \item{model_id}{Character. Unique identifier for this model (required).
 Must match the folder name in the GitHub repository (e.g. \code{"aki_v1"}).}
+
+\item{developer_id}{Character. Your identifier (e.g. GitHub username). Used
+to attribute the model in the evaluatr key service registry (required).}
 
 \item{model_name}{Character. Human-readable name (required).}
 

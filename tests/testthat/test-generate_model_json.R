@@ -14,6 +14,28 @@
 library(jsonlite)
 
 # ============================================================
+# Key service mock
+# ============================================================
+
+# Phase 3a: mock .register_model_with_key_service() so tests do not need a
+# live key service. Used by all generate_model_json() calls in this file.
+mock_register_ok_gj <- function(model_id, developer_id, model_name) {
+  list(
+    encryption_key = paste0(rep("c", 64), collapse = ""),
+    registered_at  = "2026-03-19T12:00:00Z"
+  )
+}
+
+# Helper: run generate_model_json() with registration mocked.
+with_mocked_gmj <- function(expr) {
+  with_mocked_bindings(
+    expr,
+    .register_model_with_key_service = mock_register_ok_gj,
+    .package = "evaluatr"
+  )
+}
+
+# ============================================================
 # Helpers
 # ============================================================
 
@@ -46,12 +68,13 @@ test_that("logistic from glm: JSON structure is valid and coefficients are obfus
   true_coeffs <- coef(fit)
 
   tmp <- tempdir()
-  result <- generate_model_json(
-    model      = fit,
-    model_id   = "test_glm_001",
-    model_name = "Test GLM Model",
-    output_dir = tmp
-  )
+  result <- with_mocked_gmj(generate_model_json(
+    model        = fit,
+    model_id     = "test_glm_001",
+    developer_id = "test_developer",
+    model_name   = "Test GLM Model",
+    output_dir   = tmp
+  ))
 
   # Return value is a list
   expect_type(result, "list")
@@ -98,15 +121,16 @@ test_that("logistic from manual coefficients: JSON structure is valid", {
                    biomarker_score = 0.8, treatment_group = -0.6)
 
   tmp <- tempdir()
-  result <- generate_model_json(
+  result <- with_mocked_gmj(generate_model_json(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "test_manual_001",
+    developer_id = "test_developer",
     model_name   = "Test Manual Logistic",
     outcome_type = "binary",
     variables    = c("age", "biomarker_score", "treatment_group"),
     output_dir   = tmp
-  )
+  ))
 
   expect_equal(result$model_type, "logistic")
   expect_equal(result$metadata$model_id, "test_manual_001")
@@ -146,13 +170,14 @@ test_that("multinomial from multinom: nested coefficient structure", {
   fit <- nnet::multinom(out ~ x1 + x2, data = df, trace = FALSE)
 
   tmp <- tempdir()
-  result <- generate_model_json(
+  result <- with_mocked_gmj(generate_model_json(
     model              = fit,
     model_id           = "test_multinom_001",
+    developer_id       = "test_developer",
     model_name         = "Test Multinomial",
     reference_category = "cat_A",
     output_dir         = tmp
-  )
+  ))
 
   expect_equal(result$model_type, "multinomial")
   expect_equal(result$metadata$outcome_type, "multinomial")
@@ -206,13 +231,14 @@ test_that("cox from coxph: model_parameters preserved", {
     baseline_survival = c(0.85, 0.72, 0.61)
   )
   tmp <- tempdir()
-  result <- generate_model_json(
+  result <- with_mocked_gmj(generate_model_json(
     model            = fit,
     model_id         = "test_cox_001",
+    developer_id     = "test_developer",
     model_name       = "Test Cox Model",
     model_parameters = mp,
     output_dir       = tmp
-  )
+  ))
 
   expect_equal(result$model_type, "cox")
   expect_equal(result$metadata$outcome_type, "survival")
@@ -255,13 +281,14 @@ test_that("weibull from survreg: shape parameter extracted and preserved", {
 
   mp  <- list(timepoints = c(5, 10, 15))
   tmp <- tempdir()
-  result <- generate_model_json(
+  result <- with_mocked_gmj(generate_model_json(
     model            = fit,
     model_id         = "test_weibull_001",
+    developer_id     = "test_developer",
     model_name       = "Test Weibull Model",
     model_parameters = mp,
     output_dir       = tmp
-  )
+  ))
 
   expect_equal(result$model_type, "weibull")
   expect_equal(result$metadata$outcome_type, "survival")
@@ -293,15 +320,16 @@ test_that("round-trip logistic: predictions from JSON match manual calculation",
                    biomarker_score = 0.8, treatment_group = -0.6)
 
   tmp <- tempdir()
-  result <- generate_model_json(
+  result <- with_mocked_gmj(generate_model_json(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "roundtrip_logistic",
+    developer_id = "test_developer",
     model_name   = "Round-trip Test",
     outcome_type = "binary",
     variables    = c("age", "biomarker_score", "treatment_group"),
     output_dir   = tmp
-  )
+  ))
 
   # Build validation dataset
   set.seed(99)
@@ -353,16 +381,17 @@ test_that("round-trip multinomial: predictions from JSON match softmax calculati
   )
 
   tmp <- tempdir()
-  result <- generate_model_json(
+  result <- with_mocked_gmj(generate_model_json(
     coefficients       = real_coeffs,
     model_type         = "multinomial",
     model_id           = "roundtrip_multinom",
+    developer_id       = "test_developer",
     model_name         = "Round-trip Multinomial",
     outcome_type       = "multinomial",
     variables          = c("x1", "x2"),
     reference_category = "cat_A",
     output_dir         = tmp
-  )
+  ))
 
   set.seed(77)
   n      <- 50
@@ -421,16 +450,17 @@ test_that("round-trip Cox: predictions from JSON match manual calculation", {
   )
 
   tmp <- tempdir()
-  result <- generate_model_json(
+  result <- with_mocked_gmj(generate_model_json(
     coefficients     = real_coeffs,
     model_type       = "cox",
     model_id         = "roundtrip_cox",
+    developer_id     = "test_developer",
     model_name       = "Round-trip Cox",
     outcome_type     = "survival",
     variables        = c("age", "bmi"),
     model_parameters = mp,
     output_dir       = tmp
-  )
+  ))
 
   set.seed(55)
   n      <- 40
@@ -478,16 +508,17 @@ test_that("round-trip Weibull AFT: predictions from JSON match manual calculatio
   )
 
   tmp <- tempdir()
-  result <- generate_model_json(
+  result <- with_mocked_gmj(generate_model_json(
     coefficients     = real_coeffs,
     model_type       = "weibull",
     model_id         = "roundtrip_weibull",
+    developer_id     = "test_developer",
     model_name       = "Round-trip Weibull",
     outcome_type     = "survival",
     variables        = c("age"),
     model_parameters = mp,
     output_dir       = tmp
-  )
+  ))
 
   set.seed(33)
   n      <- 40
@@ -545,6 +576,7 @@ test_that("error when model_name is missing", {
       coefficients = c("(Intercept)" = -1.25, age = 0.02),
       model_type   = "logistic",
       model_id     = "test",
+      developer_id = "test_developer",
       variables    = "age"
     ),
     "model_name"
@@ -554,8 +586,9 @@ test_that("error when model_name is missing", {
 test_that("error when both model and coefficients are NULL", {
   expect_error(
     generate_model_json(
-      model_id   = "test",
-      model_name = "Test"
+      model_id     = "test",
+      developer_id = "test_developer",
+      model_name   = "Test"
     ),
     "One of 'model' or 'coefficients'"
   )
@@ -569,6 +602,7 @@ test_that("error when both model and coefficients are provided", {
       model        = fit,
       coefficients = c(x = 1.0),
       model_id     = "test",
+      developer_id = "test_developer",
       model_name   = "Test"
     ),
     "not both"
@@ -579,9 +613,10 @@ test_that("error for unsupported model class", {
   fit <- lm(rnorm(30) ~ rnorm(30))
   expect_error(
     generate_model_json(
-      model      = fit,
-      model_id   = "test",
-      model_name = "Test"
+      model        = fit,
+      model_id     = "test",
+      developer_id = "test_developer",
+      model_name   = "Test"
     ),
     "Unsupported model class"
   )
@@ -591,9 +626,10 @@ test_that("error for non-binomial glm", {
   fit <- glm(rpois(30, 2) ~ rnorm(30), family = poisson)
   expect_error(
     generate_model_json(
-      model      = fit,
-      model_id   = "test",
-      model_name = "Test"
+      model        = fit,
+      model_id     = "test",
+      developer_id = "test_developer",
+      model_name   = "Test"
     ),
     "binomial"
   )
@@ -604,6 +640,7 @@ test_that("error when model_type missing for manual coefficients", {
     generate_model_json(
       coefficients = c("(Intercept)" = -1.0, age = 0.02),
       model_id     = "test",
+      developer_id = "test_developer",
       model_name   = "Test",
       variables    = "age"
     ),
@@ -617,6 +654,7 @@ test_that("error when variables missing for manual coefficients", {
       coefficients = c("(Intercept)" = -1.0, age = 0.02),
       model_type   = "logistic",
       model_id     = "test",
+      developer_id = "test_developer",
       model_name   = "Test"
     ),
     "variables"
@@ -629,6 +667,7 @@ test_that("error for Cox without model_parameters", {
       coefficients = c(age = 0.05),
       model_type   = "cox",
       model_id     = "test",
+      developer_id = "test_developer",
       model_name   = "Test",
       variables    = "age"
     ),
@@ -642,6 +681,7 @@ test_that("error for Cox without baseline_survival", {
       coefficients     = c(age = 0.05),
       model_type       = "cox",
       model_id         = "test",
+      developer_id     = "test_developer",
       model_name       = "Test",
       variables        = "age",
       model_parameters = list(timepoints = c(1, 2, 5))
@@ -658,6 +698,7 @@ test_that("error for multinomial without reference_category in manual mode", {
       ),
       model_type   = "multinomial",
       model_id     = "test",
+      developer_id = "test_developer",
       model_name   = "Test",
       variables    = "x1"
     ),
@@ -671,6 +712,7 @@ test_that("error for multinomial with non-list coefficients", {
       coefficients       = c("(Intercept)" = -0.5, x1 = 0.3),
       model_type         = "multinomial",
       model_id           = "test",
+      developer_id       = "test_developer",
       model_name         = "Test",
       variables          = "x1",
       reference_category = "cat_A"
@@ -687,15 +729,16 @@ test_that("error for multinomial with non-list coefficients", {
 test_that("output file exists, is valid JSON, and contains all required fields", {
   real_coeffs <- c("(Intercept)" = -1.25, age = 0.02, score = 0.8)
   tmp <- tempdir()
-  generate_model_json(
+  with_mocked_gmj(generate_model_json(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "file_test_001",
+    developer_id = "test_developer",
     model_name   = "File Test Model",
     outcome_type = "binary",
     variables    = c("age", "score"),
     output_dir   = tmp
-  )
+  ))
 
   out_path <- file.path(tmp, "coefficients.json")
   expect_true(file.exists(out_path))
@@ -723,15 +766,16 @@ test_that("output file exists, is valid JSON, and contains all required fields",
 test_that("custom output_filename is used", {
   real_coeffs <- c("(Intercept)" = -1.0, age = 0.02)
   tmp <- tempdir()
-  generate_model_json(
+  with_mocked_gmj(generate_model_json(
     coefficients    = real_coeffs,
     model_type      = "logistic",
     model_id        = "custom_fn",
+    developer_id    = "test_developer",
     model_name      = "Custom Filename Test",
     variables       = "age",
     output_dir      = tmp,
     output_filename = "my_model.json"
-  )
+  ))
   expect_true(file.exists(file.path(tmp, "my_model.json")))
 })
 
@@ -740,14 +784,15 @@ test_that("output_dir is created if it does not exist", {
   new_dir <- file.path(tempdir(), paste0("new_dir_", as.integer(Sys.time())))
   expect_false(dir.exists(new_dir))
 
-  generate_model_json(
+  with_mocked_gmj(generate_model_json(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "dir_test",
+    developer_id = "test_developer",
     model_name   = "Dir Creation Test",
     variables    = "age",
     output_dir   = new_dir
-  )
+  ))
 
   expect_true(dir.exists(new_dir))
   expect_true(file.exists(file.path(new_dir, "coefficients.json")))
@@ -763,15 +808,16 @@ test_that("preprocessing string is written to JSON and round-trips correctly", {
   preprocessing <- "validation_data$sexfemale <- ifelse(validation_data$sex == 'female', 1, 0)"
 
   tmp <- tempdir()
-  result <- generate_model_json(
+  result <- with_mocked_gmj(generate_model_json(
     coefficients  = real_coeffs,
     model_type    = "logistic",
     model_id      = "preproc_test",
+    developer_id  = "test_developer",
     model_name    = "Preprocessing Test",
     variables     = c("age", "sexfemale"),
     preprocessing = preprocessing,
     output_dir    = tmp
-  )
+  ))
 
   # In-memory result
   expect_equal(result$preprocessing, preprocessing)
@@ -787,15 +833,16 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
   preprocessing <- "validation_data$sexfemale <- ifelse(validation_data$sex == 'female', 1, 0)"
 
   tmp <- tempdir()
-  generate_model_json(
+  with_mocked_gmj(generate_model_json(
     coefficients  = real_coeffs,
     model_type    = "logistic",
     model_id      = "preproc_roundtrip",
+    developer_id  = "test_developer",
     model_name    = "Preprocessing Round-trip",
     variables     = c("age", "sexfemale"),
     preprocessing = preprocessing,
     output_dir    = tmp
-  )
+  ))
 
   set.seed(44)
   n      <- 40

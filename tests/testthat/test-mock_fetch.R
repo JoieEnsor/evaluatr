@@ -123,6 +123,27 @@ mock_fetch_multinomial <- function(api_url, token) {
        http_status = 200, success = TRUE)
 }
 
+# Phase 3a: mock for .fetch_decryption_key — returns a dummy 64-char hex key.
+# Added to all secure_model_validation() tests to avoid needing a live key
+# service in the test suite.
+mock_fetch_key <- function(model_id, n) {
+  paste0(rep("b", 64), collapse = "")
+}
+
+# Helper: run secure_model_validation() with both the GitHub fetch and the
+# key service call mocked. Used by all tests in this file.
+with_mocked_smv <- function(expr, fetch_fn) {
+  with_mocked_bindings(
+    with_mocked_bindings(
+      expr,
+      .fetch_github_model   = fetch_fn,
+      .package = "evaluatr"
+    ),
+    .fetch_decryption_key = mock_fetch_key,
+    .package = "evaluatr"
+  )
+}
+
 # ============================================================
 # Helpers: validation datasets
 # ============================================================
@@ -161,14 +182,13 @@ compute_expected_multinomial <- function(df) {
 test_that("full pipeline works with mocked logistic model", {
   df <- make_validation_data()
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_logistic,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_logistic
   )
 
   expect_type(result, "list")
@@ -184,14 +204,13 @@ test_that("full pipeline works with mocked logistic model", {
 test_that("predictions are correct (match manual LP calculation)", {
   df <- make_validation_data()
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_logistic,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_logistic
   )
 
   lp_expected <- -1 + 0.5 * df$x1 + 0.8 * df$x2
@@ -204,14 +223,13 @@ test_that("predictions are correct (match manual LP calculation)", {
 test_that("output is shuffled (not in original row order)", {
   df <- make_validation_data(n = 200, seed = 3344)
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_logistic,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_logistic
   )
 
   lp_expected <- -1 + 0.5 * df$x1 + 0.8 * df$x2
@@ -222,14 +240,13 @@ test_that("output is shuffled (not in original row order)", {
 test_that("model_info contains expected metadata", {
   df <- make_validation_data()
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_logistic,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_logistic
   )
 
   info <- result$model_info
@@ -245,14 +262,13 @@ test_that("GitHub fetch error propagates as a stop()", {
   df <- make_validation_data()
 
   expect_error(
-    with_mocked_bindings(
+    with_mocked_smv(
       secure_model_validation(
         repo_owner = "fake", repo_name = "repo", model_id = "mock",
         github_token = "fake_token", validation_data = df,
         outcome = "outcome"
       ),
-      .fetch_github_model = mock_fetch_error,
-      .package = "evaluatr"
+      fetch_fn = mock_fetch_error
     ),
     "Model not found"
   )
@@ -262,14 +278,13 @@ test_that("missing required variable in data is caught after fetch", {
   df <- make_validation_data()
 
   expect_error(
-    with_mocked_bindings(
+    with_mocked_smv(
       secure_model_validation(
         repo_owner = "fake", repo_name = "repo", model_id = "mock",
         github_token = "fake_token", validation_data = df,
         outcome = "outcome"
       ),
-      .fetch_github_model = mock_fetch_missing_var,
-      .package = "evaluatr"
+      fetch_fn = mock_fetch_missing_var
     ),
     "Missing required variables.*x_missing"
   )
@@ -282,14 +297,13 @@ test_that("model with intercept=0 and x1 coeff produces correct predictions", {
     outcome = rbinom(50, 1, 0.5)
   )
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_custom_pred,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_custom_pred
   )
 
   p_expected <- 1 / (1 + exp(-(0 + 1 * df$x1)))
@@ -306,14 +320,13 @@ test_that("subgroup ('by') column is included in shuffled output", {
     sex     = rep(c("M", "F"), each = 50)
   )
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome", by = "sex"
     ),
-    .fetch_github_model = mock_fetch_logistic,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_logistic
   )
 
   expect_true("shuffled_by" %in% names(result))
@@ -325,14 +338,13 @@ test_that("subgroup ('by') column is included in shuffled output", {
 test_that("outcome_predictions matrix has correct dimensions", {
   df <- make_validation_data(n = 80)
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_logistic,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_logistic
   )
 
   mat <- result$shuffled_outcome_predictions
@@ -344,14 +356,13 @@ test_that("outcome_predictions matrix has correct dimensions", {
 test_that("outcome values are preserved after shuffling", {
   df <- make_validation_data()
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_logistic,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_logistic
   )
 
   expect_equal(sort(result$shuffled_outcomes), sort(df$outcome))
@@ -364,14 +375,13 @@ test_that("outcome values are preserved after shuffling", {
 test_that("multinomial pipeline returns prediction_matrix with multiple columns", {
   df <- make_multinomial_data()
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock_multi",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_multinomial,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_multinomial
   )
 
   expect_type(result, "list")
@@ -387,14 +397,13 @@ test_that("multinomial pipeline returns prediction_matrix with multiple columns"
 test_that("multinomial predictions are valid probabilities summing to 1", {
   df <- make_multinomial_data()
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock_multi",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_multinomial,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_multinomial
   )
 
   pm <- result$prediction_matrix
@@ -405,14 +414,13 @@ test_that("multinomial predictions are valid probabilities summing to 1", {
 test_that("multinomial predictions match manual softmax (after sorting)", {
   df <- make_multinomial_data()
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock_multi",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_multinomial,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_multinomial
   )
 
   expected <- compute_expected_multinomial(df)
@@ -429,14 +437,13 @@ test_that("multinomial predictions match manual softmax (after sorting)", {
 test_that("multinomial output does NOT contain shuffled_predictions (binary field)", {
   df <- make_multinomial_data()
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock_multi",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_multinomial,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_multinomial
   )
 
   expect_false("shuffled_predictions"         %in% names(result))
@@ -446,14 +453,13 @@ test_that("multinomial output does NOT contain shuffled_predictions (binary fiel
 test_that("multinomial model_info has correct metadata", {
   df <- make_multinomial_data()
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock_multi",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_multinomial,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_multinomial
   )
 
   info <- result$model_info
@@ -466,14 +472,13 @@ test_that("multinomial model_info has correct metadata", {
 test_that("multinomial outcomes are preserved after shuffling", {
   df <- make_multinomial_data()
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock_multi",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_multinomial,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_multinomial
   )
 
   expect_equal(sort(result$shuffled_outcomes), sort(df$outcome))
@@ -482,14 +487,13 @@ test_that("multinomial outcomes are preserved after shuffling", {
 test_that("multinomial full_shuffled_matrix has correct dimensions", {
   df <- make_multinomial_data(n = 80)
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock_multi",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome"
     ),
-    .fetch_github_model = mock_fetch_multinomial,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_multinomial
   )
 
   # full_shuffled_matrix: outcome column + 3 prediction columns = 4
@@ -507,14 +511,13 @@ test_that("multinomial with 'by' includes shuffled_by in output", {
     center  = rep(c("site_1", "site_2"), each = 50)
   )
 
-  result <- with_mocked_bindings(
+  result <- with_mocked_smv(
     secure_model_validation(
       repo_owner = "fake", repo_name = "repo", model_id = "mock_multi",
       github_token = "fake_token", validation_data = df,
       outcome = "outcome", by = "center"
     ),
-    .fetch_github_model = mock_fetch_multinomial,
-    .package = "evaluatr"
+    fetch_fn = mock_fetch_multinomial
   )
 
   expect_true("shuffled_by" %in% names(result))
@@ -532,14 +535,13 @@ test_that("multinomial LP loop is skipped (C++ handles prediction internally)", 
   df <- make_multinomial_data()
 
   expect_no_error(
-    with_mocked_bindings(
+    with_mocked_smv(
       secure_model_validation(
         repo_owner = "fake", repo_name = "repo", model_id = "mock_multi",
         github_token = "fake_token", validation_data = df,
         outcome = "outcome"
       ),
-      .fetch_github_model = mock_fetch_multinomial,
-      .package = "evaluatr"
+      fetch_fn = mock_fetch_multinomial
     )
   )
 })

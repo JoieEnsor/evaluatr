@@ -190,6 +190,15 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
     stop(raw_result$error)
   }
 
+  # ---- Phase 3a: Log validation event with key service ----------------------
+  # This is a mandatory chokepoint: every validation is logged.
+  # No patient data is sent — only model_id and integer sample size.
+  # The returned key is not yet used for decryption (Phase 3b).
+  decryption_key <- .fetch_decryption_key(
+    model_id = model_id,
+    n        = nrow(validation_data)
+  )
+
   # ---- Delegate to C++ secure prediction engine ------------------------------
   # .predict_secure() decodes the base64 JSON, de-obfuscates coefficients,
   # computes predictions, shuffles, and wipes all coefficient data inside C++.

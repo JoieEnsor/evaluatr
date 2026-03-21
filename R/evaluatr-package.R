@@ -32,7 +32,7 @@
 #' Model coefficients are retrieved from GitHub, used to compute predictions,
 #' then immediately cleared from memory. The returned matrix is row-shuffled
 #' so that predictions cannot be matched back to individual patient records.
-#' A minimum dataset size of 20 observations (per subgroup) is enforced to
+#' A minimum dataset size of 50 observations (per subgroup) is enforced to
 #' prevent both near-individual prediction and coefficient reverse-engineering.
 #'
 #' @references

@@ -1,9 +1,5 @@
 # evaluatr: Secure Independent Evaluation of Clinical Prediction Models
 # Core validation function -- v0.1.0
-#
-# GitHub fetch currently uses the pure-R curl implementation.
-# The C++ libcurl version is preserved in inst/src/ for a future release
-# once cross-platform static linking is resolved.
 
 # Helper operator (internal)
 `%||%` <- function(a, b) if (is.null(a)) b else a
@@ -96,7 +92,7 @@
 #' }
 #'
 #' @details
-#' The function enforces a minimum dataset size of 20 observations (per
+#' The function enforces a minimum dataset size of 50 observations (per
 #' subgroup when `by` is used). Predictions are shuffled before being
 #' returned so that they cannot be matched back to individual patient records,
 #' preventing reverse-engineering of model coefficients and ensuring the
@@ -150,8 +146,8 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
   if (!outcome %in% names(validation_data)) {
     stop("Outcome variable '", outcome, "' not found in validation_data.")
   }
-  if (nrow(validation_data) < 21) {
-    stop("Validation data must have more than 20 observations.")
+  if (nrow(validation_data) < 50) {
+    stop("Validation data must have at least 50 observations.")
   }
 
   # ---- Validate 'by' parameter ------------------------------------------------
@@ -172,9 +168,9 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
     for (cat in by_categories) {
       cat_idx      <- which(by_vec == cat & !is.na(by_vec))
       cat_outcomes <- validation_data[[outcome]][cat_idx]
-      if (length(cat_outcomes) < 20) {
+      if (length(cat_outcomes) < 50) {
         stop("Category '", as.character(cat), "' in '", by,
-             "' has fewer than 20 observations.")
+             "' has fewer than 50 observations.")
       }
     }
   }
@@ -190,25 +186,21 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
     stop(raw_result$error)
   }
 
-  # ---- Phase 3a: Log validation event with key service ----------------------
-  # This is a mandatory chokepoint: every validation is logged.
-  # No patient data is sent — only model_id and integer sample size.
-  # The returned key is not yet used for decryption (Phase 3b).
-  decryption_key <- .fetch_decryption_key(
+  # ---- Retrieve keys and log validation event --------------------------------
+  keys <- .fetch_decryption_key(
     model_id = model_id,
     n        = nrow(validation_data)
   )
 
-  # ---- Delegate to C++ secure prediction engine ------------------------------
-  # .predict_secure() decodes the base64 JSON, de-obfuscates coefficients,
-  # computes predictions, shuffles, and wipes all coefficient data inside C++.
-  # Coefficients never exist as readable R objects.
+  # ---- Run prediction engine -------------------------------------------------
   result <- .predict_secure(
     encoded_content = raw_result$encoded_content,
     validation_data = validation_data,
     outcome         = outcome,
     by              = by,
-    model_id        = model_id
+    model_id        = model_id,
+    decryption_key  = keys$encryption_key,
+    obfuscation_key = keys$obfuscation_key
   )
 
   return(result)

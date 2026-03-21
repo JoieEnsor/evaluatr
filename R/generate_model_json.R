@@ -156,7 +156,15 @@
 # @return Invisible TRUE, or stops with an informative error.
 
 .validate_json_structure <- function(json_list) {
-  required_top <- c("model_type", "obfuscation_key", "coefficients", "metadata")
+  # Phase 3b: encrypted format uses encrypted_coefficients instead of coefficients
+  is_encrypted <- identical(json_list$metadata$encryption, "aes256gcm")
+
+  if (is_encrypted) {
+    # obfuscation_key is held by the key service — not written to the JSON file
+    required_top <- c("model_type", "encrypted_coefficients", "encryption_iv", "metadata")
+  } else {
+    required_top <- c("model_type", "obfuscation_key", "coefficients", "metadata")
+  }
   missing_top  <- setdiff(required_top, names(json_list))
   if (length(missing_top) > 0) {
     stop("JSON structure missing required fields: ", paste(missing_top, collapse = ", "))
@@ -178,14 +186,16 @@
     stop("metadata$variables must contain at least one predictor variable name")
   }
 
-  # Validate coefficients non-empty
-  if (json_list$model_type == "multinomial") {
-    if (length(json_list$coefficients) == 0) {
-      stop("multinomial model must have at least one non-reference category in coefficients")
-    }
-  } else {
-    if (length(json_list$coefficients) == 0) {
-      stop("coefficients must be non-empty")
+  # Validate coefficients non-empty (skip for encrypted format — ciphertext is present instead)
+  if (!is_encrypted) {
+    if (json_list$model_type == "multinomial") {
+      if (length(json_list$coefficients) == 0) {
+        stop("multinomial model must have at least one non-reference category in coefficients")
+      }
+    } else {
+      if (length(json_list$coefficients) == 0) {
+        stop("coefficients must be non-empty")
+      }
     }
   }
 
@@ -232,35 +242,50 @@
 # @return Named list representing the complete JSON structure.
 
 .assemble_model_json <- function(model_type, raw_coefficients, obfuscation_key,
-                                 preprocessing, model_parameters, metadata) {
+                                 preprocessing, model_parameters, metadata,
+                                 encrypted_b64 = NULL, iv_b64 = NULL) {
 
-  if (model_type == "multinomial") {
-    # Obfuscate each category independently using the same key.
-    # The C++ de-obfuscation calls deobfuscate_coeffs() once per category,
-    # each time seeding the PRNG fresh from the same key. We must match this:
-    # obfuscate each category's coefficients as a separate call.
-    categories <- names(raw_coefficients)
-    obf_coefficients <- vector("list", length(categories))
-    names(obf_coefficients) <- categories
-    for (cat in categories) {
-      obf_cat <- .obfuscate_coefficients(raw_coefficients[[cat]], obfuscation_key)
-      obf_coefficients[[cat]] <- as.list(obf_cat)
+  if (is.null(encrypted_b64)) {
+    # Unencrypted path: obfuscate and store plaintext coefficients
+    if (model_type == "multinomial") {
+      # Obfuscate each category independently using the same key.
+      # The C++ de-obfuscation calls deobfuscate_coeffs() once per category,
+      # each time seeding the PRNG fresh from the same key. We must match this:
+      # obfuscate each category's coefficients as a separate call.
+      categories <- names(raw_coefficients)
+      obf_coefficients <- vector("list", length(categories))
+      names(obf_coefficients) <- categories
+      for (cat in categories) {
+        obf_cat <- .obfuscate_coefficients(raw_coefficients[[cat]], obfuscation_key)
+        obf_coefficients[[cat]] <- as.list(obf_cat)
+      }
+      coeff_field <- obf_coefficients
+    } else {
+      obf_vals    <- .obfuscate_coefficients(raw_coefficients, obfuscation_key)
+      coeff_field <- as.list(obf_vals)
     }
-    coeff_field <- obf_coefficients
 
+    structure <- list(
+      model_type       = model_type,
+      obfuscation_key  = obfuscation_key,
+      coefficients     = coeff_field,
+      preprocessing    = preprocessing,
+      model_parameters = model_parameters,
+      metadata         = metadata
+    )
   } else {
-    obf_vals   <- .obfuscate_coefficients(raw_coefficients, obfuscation_key)
-    coeff_field <- as.list(obf_vals)
+    # Phase 3b encrypted path: store ciphertext instead of plain coefficients.
+    # obfuscation_key is NOT written to the JSON — it is held exclusively by
+    # the key service and returned at validation time alongside the AES key.
+    structure <- list(
+      model_type             = model_type,
+      encrypted_coefficients = encrypted_b64,
+      encryption_iv          = iv_b64,
+      preprocessing          = preprocessing,
+      model_parameters       = model_parameters,
+      metadata               = metadata
+    )
   }
-
-  structure <- list(
-    model_type       = model_type,
-    obfuscation_key  = obfuscation_key,
-    coefficients     = coeff_field,
-    preprocessing    = preprocessing,
-    model_parameters = model_parameters,
-    metadata         = metadata
-  )
 
   structure
 }
@@ -493,7 +518,30 @@ generate_model_json <- function(
          "Please supply the 'variables' argument explicitly.")
   }
 
-  # ---- Generate obfuscation key and obfuscate coefficients -------------------
+  # ---- Early validation: Cox/Weibull model_parameters -------------------------
+  # Check before registering with the key service so missing-parameter errors
+  # fire immediately without making a network call.
+  if (model_type %in% c("cox", "weibull")) {
+    if (is.null(model_parameters) || is.null(model_parameters$timepoints) ||
+        length(model_parameters$timepoints) == 0) {
+      stop("Cox and Weibull models require model_parameters with timepoints")
+    }
+    if (model_type == "cox") {
+      if (is.null(model_parameters$baseline_survival) ||
+          length(model_parameters$baseline_survival) == 0) {
+        stop("Cox model_parameters must include baseline_survival")
+      }
+      if (length(model_parameters$timepoints) !=
+          length(model_parameters$baseline_survival)) {
+        stop("timepoints and baseline_survival must have the same length")
+      }
+    }
+    if (model_type == "weibull" && is.null(model_parameters$shape)) {
+      stop("Weibull model_parameters must include shape")
+    }
+  }
+
+  # ---- Generate obfuscation key -----------------------------------------------
   obfuscation_key <- .generate_obfuscation_key()
 
   # ---- Build metadata ---------------------------------------------------------
@@ -509,6 +557,46 @@ generate_model_json <- function(
     metadata$reference_category <- reference_category
   }
 
+  # ---- Phase 3a/3b: Register model with key service --------------------------
+  # Mandatory chokepoint: every model registration is logged.
+  # The obfuscation_key is sent to the key service here and NOT written to the
+  # JSON file. At validation time, .fetch_decryption_key() returns both keys.
+  registration <- .register_model_with_key_service(
+    model_id        = model_id,
+    developer_id    = developer_id,
+    model_name      = model_name,
+    obfuscation_key = obfuscation_key
+  )
+
+  # ---- Phase 3b: AES-256-GCM encrypt the obfuscated coefficients -------------
+  # Obfuscate coefficients, serialise to JSON, then encrypt the JSON string.
+  # The ciphertext + nonce are stored in the JSON; plaintext coefficients are not.
+  key_raw <- .hex_to_raw(registration$encryption_key)
+
+  coeff_json <- jsonlite::toJSON(
+    if (model_type == "multinomial") {
+      lapply(raw_coefficients, function(cat_coeffs) {
+        as.list(.obfuscate_coefficients(cat_coeffs, obfuscation_key))
+      })
+    } else {
+      as.list(.obfuscate_coefficients(raw_coefficients, obfuscation_key))
+    },
+    auto_unbox = TRUE,
+    digits     = 10
+  )
+
+  iv         <- openssl::rand_bytes(12)   # 96-bit nonce for AES-GCM
+  ciphertext <- openssl::aes_gcm_encrypt(
+    data = charToRaw(coeff_json),
+    key  = key_raw,
+    iv   = iv
+  )
+  encrypted_b64 <- openssl::base64_encode(ciphertext)
+  iv_b64        <- openssl::base64_encode(iv)
+
+  # Add encryption marker to metadata
+  metadata$encryption <- "aes256gcm"
+
   # ---- Assemble full JSON structure -------------------------------------------
   json_list <- .assemble_model_json(
     model_type       = model_type,
@@ -516,20 +604,13 @@ generate_model_json <- function(
     obfuscation_key  = obfuscation_key,
     preprocessing    = preprocessing,
     model_parameters = model_parameters,
-    metadata         = metadata
+    metadata         = metadata,
+    encrypted_b64    = encrypted_b64,
+    iv_b64           = iv_b64
   )
 
   # ---- Validate ---------------------------------------------------------------
   .validate_json_structure(json_list)
-
-  # ---- Phase 3a: Register model with key service -----------------------------
-  # This is a mandatory chokepoint: every model registration is logged.
-  # The returned encryption_key is not yet used for encryption (Phase 3b).
-  registration <- .register_model_with_key_service(
-    model_id     = model_id,
-    developer_id = developer_id,
-    model_name   = model_name
-  )
 
   # ---- Write to file ----------------------------------------------------------
   filename <- output_filename %||% "coefficients.json"
@@ -565,10 +646,11 @@ generate_model_json <- function(
   if (!is.null(preprocessing) && nzchar(preprocessing)) {
     message("  preprocessing: <included>")
   }
-  message("  obfuscation_key: ", obfuscation_key)
-  message("NOTE: The obfuscation key is embedded in the JSON. ",
-          "Coefficients are protected by the compiled C++ binary salt, ",
-          "not by the key alone. Keep the JSON in a private repository.")
+  message("  obfuscation_key: <held by key service — not stored in JSON>")
+  message("  encryption     : aes256gcm")
+  message("NOTE: Coefficients are AES-256-GCM encrypted (key held by key service) ",
+          "and obfuscated (protected by compiled C++ binary salt). ",
+          "Keep the JSON in a private repository.")
 
   invisible(json_list)
 }

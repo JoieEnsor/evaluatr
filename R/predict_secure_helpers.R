@@ -68,6 +68,54 @@
 }
 
 
+# ---- .decrypt_coefficients_in_json() ----------------------------------------
+# Decrypts the coefficient payload if encrypted, and prepares the JSON for
+# the C++ engine. Returns encoded_content unchanged if not encrypted.
+#
+# @param encoded_content Character. Base64-encoded JSON (GitHub API format,
+#   may contain embedded newlines).
+# @param decryption_key Character. 64-char hex string.
+# @param obfuscation_key Character. 32-char hex string from key service,
+#   or "" for v0/v1 unencrypted models (key is already in the JSON).
+# @return Character. Base64-encoded JSON with decrypted coefficients and
+#   obfuscation_key injected.
+
+.decrypt_coefficients_in_json <- function(encoded_content, decryption_key,
+                                          obfuscation_key = "") {
+  # Decode the base64 GitHub content (strip embedded newlines first)
+  json_raw  <- openssl::base64_decode(gsub("\n", "", encoded_content))
+  json_list <- jsonlite::fromJSON(rawToChar(json_raw), simplifyVector = FALSE)
+
+  # If not encrypted, return unchanged (v0/v1: obfuscation_key already in JSON)
+  if (!identical(json_list$metadata$encryption, "aes256gcm")) {
+    return(encoded_content)
+  }
+
+  key_raw    <- .hex_to_raw(decryption_key)
+  iv_raw     <- openssl::base64_decode(json_list$encryption_iv)
+  cipher_raw <- openssl::base64_decode(json_list$encrypted_coefficients)
+  plain_raw  <- openssl::aes_gcm_decrypt(data = cipher_raw, key = key_raw,
+                                         iv = iv_raw)
+
+  # Substitute decrypted coefficients back; remove encryption fields
+  json_list$coefficients           <- jsonlite::fromJSON(rawToChar(plain_raw),
+                                                         simplifyVector = FALSE)
+  json_list$encrypted_coefficients <- NULL
+  json_list$encryption_iv          <- NULL
+  json_list$metadata$encryption    <- NULL
+
+  # Inject obfuscation_key if provided
+  if (nzchar(obfuscation_key)) {
+    json_list$obfuscation_key <- obfuscation_key
+  }
+
+  # Re-encode as base64 for the C++ engine
+  new_json <- jsonlite::toJSON(json_list, auto_unbox = TRUE,
+                               null = "null", pretty = FALSE, digits = 10)
+  openssl::base64_encode(charToRaw(new_json))
+}
+
+
 # ---- .predict_secure() ------------------------------------------------------
 # Main orchestrator — calls C++ engine and packages result as evaluatr_result.
 #
@@ -76,10 +124,30 @@
 # @param outcome Character. Name of outcome column.
 # @param by Character or NULL. Name of subgroup column.
 # @param model_id Character. Used to populate model_info.
+# @param decryption_key Character. 64-char hex string, or "" for unencrypted models.
+# @param obfuscation_key Character. 32-char hex string, or "" for v0/v1 models.
 # @return An object of class "evaluatr_result".
 
 .predict_secure <- function(encoded_content, validation_data, outcome,
-                            by = NULL, model_id = "unknown") {
+                            by = NULL, model_id = "unknown",
+                            decryption_key = "", obfuscation_key = "") {
+
+  # Refuse to run if internal functions are being debugged.
+  if (isdebugged(.predict_secure) ||
+      isdebugged(.decrypt_coefficients_in_json) ||
+      isdebugged(.hex_to_raw) ||
+      isdebugged(.run_preprocessing)) {
+    stop("evaluatr: debugging of internal security functions is not permitted.")
+  }
+
+  # Decrypt and prepare encoded content if a key was provided
+  if (nzchar(decryption_key) && nchar(decryption_key) == 64) {
+    encoded_content <- .decrypt_coefficients_in_json(
+      encoded_content = encoded_content,
+      decryption_key  = decryption_key,
+      obfuscation_key = obfuscation_key
+    )
+  }
 
   # Step 1: Extract metadata from C++ (no coefficients returned)
   meta <- .extract_model_metadata_cpp(encoded_content)
@@ -218,6 +286,17 @@
   }
 
   result
+}
+
+
+# ---- .hex_to_raw() ----------------------------------------------------------
+# Convert a lowercase hex string to a raw vector.
+# .hex_to_raw exists but is not exported; use base R instead.
+
+.hex_to_raw <- function(hex_str) {
+  pairs <- substring(hex_str, seq(1, nchar(hex_str) - 1, 2),
+                              seq(2, nchar(hex_str),     2))
+  as.raw(strtoi(pairs, 16L))
 }
 
 

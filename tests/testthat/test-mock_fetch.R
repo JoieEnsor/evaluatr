@@ -123,11 +123,15 @@ mock_fetch_multinomial <- function(api_url, token) {
        http_status = 200, success = TRUE)
 }
 
-# Phase 3a: mock for .fetch_decryption_key — returns a dummy 64-char hex key.
-# Added to all secure_model_validation() tests to avoid needing a live key
-# service in the test suite.
+# Phase 3a/3b: mock for .fetch_decryption_key — returns both keys as a list.
+# Improvement B: obfuscation_key now also returned by key service.
+# For v0/v1 mock JSONs (no encryption), the obfuscation_key value is ignored
+# by .predict_secure() because the JSON is unencrypted and not transformed.
 mock_fetch_key <- function(model_id, n) {
-  paste0(rep("b", 64), collapse = "")
+  list(
+    encryption_key  = paste0(rep("b", 64), collapse = ""),
+    obfuscation_key = paste0(rep("b", 32), collapse = "")
+  )
 }
 
 # Helper: run secure_model_validation() with both the GitHub fetch and the

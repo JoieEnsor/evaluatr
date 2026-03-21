@@ -19,6 +19,7 @@ Depends:
 Imports:
     curl (>= 5.0.0),
     jsonlite (>= 1.8.0),
+    openssl (>= 2.0.0),
     ggplot2 (>= 3.4.0),
     CalibrationCurves (>= 2.0.0),
     rmda (>= 1.6),

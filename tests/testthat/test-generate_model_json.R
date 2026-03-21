@@ -19,7 +19,8 @@ library(jsonlite)
 
 # Phase 3a: mock .register_model_with_key_service() so tests do not need a
 # live key service. Used by all generate_model_json() calls in this file.
-mock_register_ok_gj <- function(model_id, developer_id, model_name) {
+mock_register_ok_gj <- function(model_id, developer_id, model_name,
+                                 obfuscation_key) {
   list(
     encryption_key = paste0(rep("c", 64), collapse = ""),
     registered_at  = "2026-03-19T12:00:00Z"
@@ -33,6 +34,28 @@ with_mocked_gmj <- function(expr) {
     .register_model_with_key_service = mock_register_ok_gj,
     .package = "evaluatr"
   )
+}
+
+# Helper: like with_mocked_gmj but captures the obfuscation_key that
+# generate_model_json() sends to the key service (Improvement B).
+# Returns a list: $result (generate_model_json return value) and
+# $obfuscation_key (the key that was registered).
+with_mocked_gmj_capture <- function(expr) {
+  captured_obf_key <- NULL
+  mock_register_capture <- function(model_id, developer_id, model_name,
+                                    obfuscation_key) {
+    captured_obf_key <<- obfuscation_key
+    list(
+      encryption_key = paste0(rep("c", 64), collapse = ""),
+      registered_at  = "2026-03-19T12:00:00Z"
+    )
+  }
+  result <- with_mocked_bindings(
+    expr,
+    .register_model_with_key_service = mock_register_capture,
+    .package = "evaluatr"
+  )
+  list(result = result, obfuscation_key = captured_obf_key)
 }
 
 # ============================================================
@@ -83,23 +106,16 @@ test_that("logistic from glm: JSON structure is valid and coefficients are obfus
   expect_equal(result$metadata$model_name, "Test GLM Model")
   expect_equal(result$metadata$outcome_type, "binary")
 
-  # Obfuscation key present and 32 chars
-  expect_false(is.null(result$obfuscation_key))
-  expect_equal(nchar(result$obfuscation_key), 32L)
+  # Improvement B: obfuscation_key NOT stored in JSON — held by key service
+  expect_true(is.null(result$obfuscation_key),
+              label = "obfuscation_key absent from v1.1 JSON (held by key service)")
 
-  # Coefficient names match
-  coeff_names <- names(result$coefficients)
-  expect_true("(Intercept)" %in% coeff_names)
-  expect_true("age"   %in% coeff_names)
-  expect_true("score" %in% coeff_names)
-
-  # Coefficients are OBFUSCATED — values differ from originals
-  for (nm in names(true_coeffs)) {
-    expect_false(
-      isTRUE(all.equal(unlist(result$coefficients[[nm]]), true_coeffs[[nm]], tolerance = 1e-8)),
-      label = paste("coefficient", nm, "should be obfuscated, not equal to original")
-    )
-  }
+  # Phase 3b: encrypted format — no plaintext coefficients field
+  expect_false("coefficients" %in% names(result),
+               label = "plaintext coefficients not present in encrypted JSON")
+  expect_true("encrypted_coefficients" %in% names(result))
+  expect_true("encryption_iv" %in% names(result))
+  expect_equal(result$metadata$encryption, "aes256gcm")
 
   # Variables in metadata
   expect_true("age"   %in% unlist(result$metadata$variables))
@@ -134,19 +150,13 @@ test_that("logistic from manual coefficients: JSON structure is valid", {
 
   expect_equal(result$model_type, "logistic")
   expect_equal(result$metadata$model_id, "test_manual_001")
-  expect_equal(nchar(result$obfuscation_key), 32L)
+  # Improvement B: obfuscation_key absent from JSON (held by key service)
+  expect_true(is.null(result$obfuscation_key))
 
-  # All coefficient names present
-  coeff_names <- names(result$coefficients)
-  for (nm in names(real_coeffs)) {
-    expect_true(nm %in% coeff_names)
-  }
-
-  # Coefficients obfuscated
-  for (nm in names(real_coeffs)) {
-    stored <- unlist(result$coefficients[[nm]])
-    expect_false(isTRUE(all.equal(stored, real_coeffs[[nm]], tolerance = 1e-8)))
-  }
+  # Phase 3b: encrypted format
+  expect_false("coefficients" %in% names(result))
+  expect_true("encrypted_coefficients" %in% names(result))
+  expect_equal(result$metadata$encryption, "aes256gcm")
 
   # Variables correct
   expect_equal(sort(unlist(result$metadata$variables)),
@@ -182,20 +192,10 @@ test_that("multinomial from multinom: nested coefficient structure", {
   expect_equal(result$model_type, "multinomial")
   expect_equal(result$metadata$outcome_type, "multinomial")
 
-  # coefficients is a nested list (one entry per non-reference category)
-  expect_type(result$coefficients, "list")
-  cat_names <- names(result$coefficients)
-  expect_true(length(cat_names) >= 2)
-  # Reference category should NOT be a key in coefficients
-  expect_false("cat_A" %in% cat_names)
-
-  # Each category has coefficient sub-list with (Intercept) and predictors
-  for (cat in cat_names) {
-    cat_coeffs <- result$coefficients[[cat]]
-    expect_true("(Intercept)" %in% names(cat_coeffs))
-    expect_true("x1" %in% names(cat_coeffs))
-    expect_true("x2" %in% names(cat_coeffs))
-  }
+  # Phase 3b: encrypted format — plaintext coefficients not present
+  expect_false("coefficients" %in% names(result))
+  expect_true("encrypted_coefficients" %in% names(result))
+  expect_equal(result$metadata$encryption, "aes256gcm")
 
   # Variables in metadata (no intercept)
   vars <- unlist(result$metadata$variables)
@@ -248,12 +248,10 @@ test_that("cox from coxph: model_parameters preserved", {
   expect_equal(unlist(stored_mp$timepoints),        mp$timepoints)
   expect_equal(unlist(stored_mp$baseline_survival), mp$baseline_survival)
 
-  # Coefficients obfuscated (Cox has no intercept)
-  true_coeffs <- coef(fit)
-  for (nm in names(true_coeffs)) {
-    stored <- unlist(result$coefficients[[nm]])
-    expect_false(isTRUE(all.equal(stored, true_coeffs[[nm]], tolerance = 1e-8)))
-  }
+  # Phase 3b: encrypted format
+  expect_false("coefficients" %in% names(result))
+  expect_true("encrypted_coefficients" %in% names(result))
+  expect_equal(result$metadata$encryption, "aes256gcm")
 
   # Variables correct (no intercept for Cox)
   vars <- unlist(result$metadata$variables)
@@ -320,7 +318,8 @@ test_that("round-trip logistic: predictions from JSON match manual calculation",
                    biomarker_score = 0.8, treatment_group = -0.6)
 
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  # Capture obfuscation_key sent to key service (Improvement B)
+  captured <- with_mocked_gmj_capture(generate_model_json(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "roundtrip_logistic",
@@ -330,6 +329,7 @@ test_that("round-trip logistic: predictions from JSON match manual calculation",
     variables    = c("age", "biomarker_score", "treatment_group"),
     output_dir   = tmp
   ))
+  obf_key <- captured$obfuscation_key
 
   # Build validation dataset
   set.seed(99)
@@ -342,15 +342,18 @@ test_that("round-trip logistic: predictions from JSON match manual calculation",
   )
 
   # Base64-encode the JSON for .predict_secure()
-  json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
-  encoded      <- base64_enc(paste(json_str, collapse = "\n"))
+  json_str <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
+  encoded  <- base64_enc(paste(json_str, collapse = "\n"))
 
-  # Run secure prediction
+  # Run secure prediction — pass both keys (Improvement B)
+  mock_enc_key <- paste0(rep("c", 64), collapse = "")
   pred_result  <- evaluatr:::.predict_secure(
     encoded_content = encoded,
     validation_data = val_df,
     outcome         = "outcome",
-    model_id        = "roundtrip_logistic"
+    model_id        = "roundtrip_logistic",
+    decryption_key  = mock_enc_key,
+    obfuscation_key = obf_key
   )
 
   cpp_preds   <- pred_result$shuffled_predictions
@@ -381,7 +384,7 @@ test_that("round-trip multinomial: predictions from JSON match softmax calculati
   )
 
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  captured <- with_mocked_gmj_capture(generate_model_json(
     coefficients       = real_coeffs,
     model_type         = "multinomial",
     model_id           = "roundtrip_multinom",
@@ -392,6 +395,7 @@ test_that("round-trip multinomial: predictions from JSON match softmax calculati
     reference_category = "cat_A",
     output_dir         = tmp
   ))
+  obf_key <- captured$obfuscation_key
 
   set.seed(77)
   n      <- 50
@@ -401,14 +405,16 @@ test_that("round-trip multinomial: predictions from JSON match softmax calculati
     outcome = sample(c(0, 1, 2), n, replace = TRUE)
   )
 
-  json_str    <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
-  encoded     <- base64_enc(paste(json_str, collapse = "\n"))
-
-  pred_result <- evaluatr:::.predict_secure(
+  json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
+  encoded      <- base64_enc(paste(json_str, collapse = "\n"))
+  mock_enc_key <- paste0(rep("c", 64), collapse = "")
+  pred_result  <- evaluatr:::.predict_secure(
     encoded_content = encoded,
     validation_data = val_df,
     outcome         = "outcome",
-    model_id        = "roundtrip_multinom"
+    model_id        = "roundtrip_multinom",
+    decryption_key  = mock_enc_key,
+    obfuscation_key = obf_key
   )
 
   cpp_preds <- pred_result$prediction_matrix
@@ -450,7 +456,7 @@ test_that("round-trip Cox: predictions from JSON match manual calculation", {
   )
 
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  captured <- with_mocked_gmj_capture(generate_model_json(
     coefficients     = real_coeffs,
     model_type       = "cox",
     model_id         = "roundtrip_cox",
@@ -461,6 +467,7 @@ test_that("round-trip Cox: predictions from JSON match manual calculation", {
     model_parameters = mp,
     output_dir       = tmp
   ))
+  obf_key <- captured$obfuscation_key
 
   set.seed(55)
   n      <- 40
@@ -470,14 +477,16 @@ test_that("round-trip Cox: predictions from JSON match manual calculation", {
     outcome = rbinom(n, 1, 0.5)
   )
 
-  json_str    <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
-  encoded     <- base64_enc(paste(json_str, collapse = "\n"))
-
-  pred_result <- evaluatr:::.predict_secure(
+  json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
+  encoded      <- base64_enc(paste(json_str, collapse = "\n"))
+  mock_enc_key <- paste0(rep("c", 64), collapse = "")
+  pred_result  <- evaluatr:::.predict_secure(
     encoded_content = encoded,
     validation_data = val_df,
     outcome         = "outcome",
-    model_id        = "roundtrip_cox"
+    model_id        = "roundtrip_cox",
+    decryption_key  = mock_enc_key,
+    obfuscation_key = obf_key
   )
 
   cpp_preds <- pred_result$prediction_matrix
@@ -508,7 +517,7 @@ test_that("round-trip Weibull AFT: predictions from JSON match manual calculatio
   )
 
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  captured <- with_mocked_gmj_capture(generate_model_json(
     coefficients     = real_coeffs,
     model_type       = "weibull",
     model_id         = "roundtrip_weibull",
@@ -519,6 +528,7 @@ test_that("round-trip Weibull AFT: predictions from JSON match manual calculatio
     model_parameters = mp,
     output_dir       = tmp
   ))
+  obf_key <- captured$obfuscation_key
 
   set.seed(33)
   n      <- 40
@@ -527,14 +537,16 @@ test_that("round-trip Weibull AFT: predictions from JSON match manual calculatio
     outcome = rbinom(n, 1, 0.6)
   )
 
-  json_str    <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
-  encoded     <- base64_enc(paste(json_str, collapse = "\n"))
-
-  pred_result <- evaluatr:::.predict_secure(
+  json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
+  encoded      <- base64_enc(paste(json_str, collapse = "\n"))
+  mock_enc_key <- paste0(rep("c", 64), collapse = "")
+  pred_result  <- evaluatr:::.predict_secure(
     encoded_content = encoded,
     validation_data = val_df,
     outcome         = "outcome",
-    model_id        = "roundtrip_weibull"
+    model_id        = "roundtrip_weibull",
+    decryption_key  = mock_enc_key,
+    obfuscation_key = obf_key
   )
 
   cpp_preds <- pred_result$prediction_matrix
@@ -750,11 +762,16 @@ test_that("output file exists, is valid JSON, and contains all required fields",
   )
   expect_false(is.null(parsed), label = "JSON file is valid and parseable")
 
-  # Required top-level fields
-  for (field in c("model_type", "obfuscation_key", "coefficients", "metadata")) {
+  # Required top-level fields (Improvement B: obfuscation_key NOT in JSON)
+  for (field in c("model_type", "encrypted_coefficients",
+                  "encryption_iv", "metadata")) {
     expect_true(field %in% names(parsed),
                 label = paste("field", field, "present in JSON"))
   }
+  expect_false("obfuscation_key" %in% names(parsed),
+               label = "obfuscation_key absent from JSON (held by key service)")
+  expect_false("coefficients" %in% names(parsed),
+               label = "plaintext coefficients absent from encrypted JSON")
 
   # Required metadata fields
   for (field in c("model_id", "model_name", "version", "outcome_type", "variables")) {
@@ -833,7 +850,7 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
   preprocessing <- "validation_data$sexfemale <- ifelse(validation_data$sex == 'female', 1, 0)"
 
   tmp <- tempdir()
-  with_mocked_gmj(generate_model_json(
+  captured <- with_mocked_gmj_capture(generate_model_json(
     coefficients  = real_coeffs,
     model_type    = "logistic",
     model_id      = "preproc_roundtrip",
@@ -843,6 +860,7 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
     preprocessing = preprocessing,
     output_dir    = tmp
   ))
+  obf_key <- captured$obfuscation_key
 
   set.seed(44)
   n      <- 40
@@ -857,12 +875,15 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
   encoded     <- base64_enc(paste(json_str, collapse = "\n"))
 
   # Should not error (preprocessing creates 'sexfemale')
+  mock_key <- paste0(rep("c", 64), collapse = "")
   expect_no_error({
     pred_result <- evaluatr:::.predict_secure(
       encoded_content = encoded,
       validation_data = val_df,
       outcome         = "outcome",
-      model_id        = "preproc_roundtrip"
+      model_id        = "preproc_roundtrip",
+      decryption_key  = mock_key,
+      obfuscation_key = obf_key
     )
   })
 
@@ -876,4 +897,183 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
 
   expect_equal(sort(round(cpp_preds, 5)), sort(round(manual_preds, 5)),
                tolerance = 1e-4)
+})
+
+
+# ============================================================
+# Phase 3b: Encryption tests
+# ============================================================
+
+test_that("Phase 3b: generated JSON has encrypted_coefficients, not plaintext", {
+  real_coeffs <- c("(Intercept)" = -1.25, age = 0.02, score = 0.8)
+  tmp <- tempdir()
+  result <- with_mocked_gmj(generate_model_json(
+    coefficients = real_coeffs,
+    model_type   = "logistic",
+    model_id     = "enc_test_001",
+    developer_id = "test_developer",
+    model_name   = "Encryption Test",
+    outcome_type = "binary",
+    variables    = c("age", "score"),
+    output_dir   = tmp
+  ))
+
+  expect_true("encrypted_coefficients" %in% names(result))
+  expect_true("encryption_iv" %in% names(result))
+  expect_false("coefficients" %in% names(result))
+  expect_equal(result$metadata$encryption, "aes256gcm")
+
+  # encrypted_coefficients should be a non-empty base64 string
+  expect_true(nzchar(result$encrypted_coefficients))
+  expect_true(nzchar(result$encryption_iv))
+})
+
+
+test_that("Phase 3b: .validate_json_structure() accepts encrypted format", {
+  # Improvement B: obfuscation_key is NOT in the encrypted JSON
+  enc_list <- list(
+    model_type             = "logistic",
+    encrypted_coefficients = "base64ciphertexthere",
+    encryption_iv          = "base64ivhere",
+    preprocessing          = NULL,
+    model_parameters       = NULL,
+    metadata               = list(
+      model_id     = "enc_valid_test",
+      model_name   = "Enc Valid Test",
+      version      = "1.0",
+      outcome_type = "binary",
+      variables    = list("age"),
+      description  = "",
+      encryption   = "aes256gcm"
+    )
+  )
+  expect_true(evaluatr:::.validate_json_structure(enc_list))
+})
+
+
+test_that("Phase 3b: .decrypt_coefficients_in_json() round-trips correctly", {
+  # Improvement B: obfuscation_key NOT in JSON; passed as argument
+  real_coeffs   <- c("(Intercept)" = -1.25, "age" = 0.02, "score" = 0.8)
+  obf_key       <- evaluatr:::.generate_obfuscation_key()
+  obf_coeffs    <- as.list(evaluatr:::.obfuscate_coefficients(real_coeffs, obf_key))
+  coeff_json    <- jsonlite::toJSON(obf_coeffs, auto_unbox = TRUE)
+
+  enc_key_hex   <- paste0(rep("c", 64), collapse = "")
+  key_raw       <- evaluatr:::.hex_to_raw(enc_key_hex)
+  iv            <- openssl::rand_bytes(12)
+  ciphertext    <- openssl::aes_gcm_encrypt(charToRaw(coeff_json), key_raw, iv)
+
+  json_list <- list(
+    model_type             = "logistic",
+    encrypted_coefficients = openssl::base64_encode(ciphertext),
+    encryption_iv          = openssl::base64_encode(iv),
+    preprocessing          = NULL,
+    model_parameters       = NULL,
+    metadata               = list(
+      model_id     = "decrypt_test",
+      model_name   = "Decrypt Test",
+      version      = "1.0",
+      outcome_type = "binary",
+      variables    = list("age", "score"),
+      description  = "",
+      encryption   = "aes256gcm"
+    )
+  )
+
+  encoded <- openssl::base64_encode(charToRaw(
+    jsonlite::toJSON(json_list, auto_unbox = TRUE, null = "null", digits = 10)
+  ))
+
+  # Pass obfuscation_key as argument (from key service)
+  decrypted_encoded <- evaluatr:::.decrypt_coefficients_in_json(
+    encoded, enc_key_hex, obf_key
+  )
+
+  # Decrypted result should parse with coefficients, obfuscation_key injected
+  decrypted_json <- rawToChar(openssl::base64_decode(decrypted_encoded))
+  parsed         <- jsonlite::fromJSON(decrypted_json, simplifyVector = FALSE)
+
+  expect_true("coefficients" %in% names(parsed))
+  expect_false("encrypted_coefficients" %in% names(parsed))
+  expect_false("encryption_iv" %in% names(parsed))
+  expect_null(parsed$metadata$encryption)
+  expect_equal(parsed$obfuscation_key, obf_key)
+
+  # Coefficient names preserved
+  expect_true("(Intercept)" %in% names(parsed$coefficients))
+  expect_true("age" %in% names(parsed$coefficients))
+  expect_true("score" %in% names(parsed$coefficients))
+})
+
+
+test_that("Phase 3b: .decrypt_coefficients_in_json() passes through unencrypted JSON", {
+  # Unencrypted v1 JSON should be returned unchanged
+  real_coeffs <- c("(Intercept)" = -1.25, "age" = 0.02)
+  obf_key     <- evaluatr:::.generate_obfuscation_key()
+  obf_coeffs  <- as.list(evaluatr:::.obfuscate_coefficients(real_coeffs, obf_key))
+
+  json_list <- list(
+    model_type      = "logistic",
+    obfuscation_key = obf_key,
+    coefficients    = obf_coeffs,
+    preprocessing   = NULL,
+    model_parameters = NULL,
+    metadata        = list(
+      model_id     = "unenc_pass",
+      model_name   = "Unencrypted",
+      version      = "1.0",
+      outcome_type = "binary",
+      variables    = list("age")
+    )
+  )
+
+  encoded          <- openssl::base64_encode(charToRaw(
+    jsonlite::toJSON(json_list, auto_unbox = TRUE, null = "null", digits = 10)
+  ))
+  enc_key_hex      <- paste0(rep("c", 64), collapse = "")
+
+  result_encoded   <- evaluatr:::.decrypt_coefficients_in_json(encoded, enc_key_hex)
+
+  # Should return unchanged (same base64 content encodes the same JSON)
+  parsed <- jsonlite::fromJSON(rawToChar(openssl::base64_decode(result_encoded)),
+                               simplifyVector = FALSE)
+  expect_true("coefficients" %in% names(parsed))
+  expect_false("encrypted_coefficients" %in% names(parsed))
+})
+
+
+test_that("Phase 3b: wrong decryption key produces an error", {
+  real_coeffs   <- c("(Intercept)" = -1.25, "age" = 0.02)
+  obf_key       <- evaluatr:::.generate_obfuscation_key()
+  obf_coeffs    <- as.list(evaluatr:::.obfuscate_coefficients(real_coeffs, obf_key))
+  coeff_json    <- jsonlite::toJSON(obf_coeffs, auto_unbox = TRUE)
+
+  correct_key   <- paste0(rep("c", 64), collapse = "")
+  wrong_key     <- paste0(rep("d", 64), collapse = "")
+  key_raw       <- evaluatr:::.hex_to_raw(correct_key)
+  iv            <- openssl::rand_bytes(12)
+  ciphertext    <- openssl::aes_gcm_encrypt(charToRaw(coeff_json), key_raw, iv)
+
+  # Improvement B: obfuscation_key not in JSON
+  json_list <- list(
+    model_type             = "logistic",
+    encrypted_coefficients = openssl::base64_encode(ciphertext),
+    encryption_iv          = openssl::base64_encode(iv),
+    preprocessing          = NULL,
+    model_parameters       = NULL,
+    metadata               = list(
+      model_id = "wrong_key_test", model_name = "WK", version = "1.0",
+      outcome_type = "binary", variables = list("age"),
+      encryption = "aes256gcm"
+    )
+  )
+
+  encoded <- openssl::base64_encode(charToRaw(
+    jsonlite::toJSON(json_list, auto_unbox = TRUE, null = "null", digits = 10)
+  ))
+
+  expect_error(
+    evaluatr:::.decrypt_coefficients_in_json(encoded, wrong_key, obf_key),
+    label = "wrong key should cause decryption error"
+  )
 })

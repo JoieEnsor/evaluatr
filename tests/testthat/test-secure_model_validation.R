@@ -40,8 +40,8 @@ test_that("outcome must exist in validation_data", {
   )
 })
 
-test_that("validation_data must have more than 20 observations", {
-  df_small <- data.frame(x = rnorm(20), outcome = rbinom(20, 1, 0.5))
+test_that("validation_data must have at least 50 observations", {
+  df_small <- data.frame(x = rnorm(49), outcome = rbinom(49, 1, 0.5))
 
   expect_error(
     secure_model_validation(
@@ -49,11 +49,11 @@ test_that("validation_data must have more than 20 observations", {
       github_token = "tok", validation_data = df_small,
       outcome = "outcome"
     ),
-    "more than 20 observations"
+    "at least 50 observations"
   )
 
-  # 21 rows should pass the size check (will fail later at GitHub fetch)
-  df_ok <- data.frame(x = rnorm(21), outcome = rbinom(21, 1, 0.5))
+  # 50 rows should pass the size check (will fail later at GitHub fetch)
+  df_ok <- data.frame(x = rnorm(50), outcome = rbinom(50, 1, 0.5))
   expect_error(
     secure_model_validation(
       repo_owner = "owner", repo_name = "repo", model_id = "id",
@@ -66,8 +66,8 @@ test_that("validation_data must have more than 20 observations", {
 })
 
 test_that("'by' must be a single character string naming a column", {
-  df <- data.frame(x = rnorm(30), outcome = rbinom(30, 1, 0.5),
-                   group = rep(c("A", "B"), 15))
+  df <- data.frame(x = rnorm(50), outcome = rbinom(50, 1, 0.5),
+                   group = rep(c("A", "B"), 25))
 
 
   expect_error(
@@ -99,8 +99,8 @@ test_that("'by' must be a single character string naming a column", {
 })
 
 test_that("'by' variable must have at least 2 non-missing categories", {
-  df <- data.frame(x = rnorm(30), outcome = rbinom(30, 1, 0.5),
-                   group = rep("A", 30))
+  df <- data.frame(x = rnorm(50), outcome = rbinom(50, 1, 0.5),
+                   group = rep("A", 50))
 
   expect_error(
     secure_model_validation(
@@ -112,11 +112,11 @@ test_that("'by' variable must have at least 2 non-missing categories", {
   )
 })
 
-test_that("each 'by' category must have at least 20 observations", {
+test_that("each 'by' category must have at least 50 observations", {
   df <- data.frame(
-    x       = rnorm(30),
-    outcome = rbinom(30, 1, 0.5),
-    group   = c(rep("A", 25), rep("B", 5))
+    x       = rnorm(100),
+    outcome = rbinom(100, 1, 0.5),
+    group   = c(rep("A", 75), rep("B", 25))
   )
 
   expect_error(
@@ -125,6 +125,6 @@ test_that("each 'by' category must have at least 20 observations", {
       github_token = "tok", validation_data = df,
       outcome = "outcome", by = "group"
     ),
-    "fewer than 20 observations"
+    "fewer than 50 observations"
   )
 })

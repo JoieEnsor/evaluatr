@@ -1,0 +1,7 @@
+# src/Makevars.win -- Windows-specific compiler hardening for evaluatr
+#
+# Same intent as Makevars (Unix). On Windows/MinGW-w64:
+# -fvisibility=hidden  : restricts DLL export table to Rcpp-exported entry points only.
+# -O2                  : release-mode optimisations.
+# -DNDEBUG             : disables debug-build paths.
+PKG_CXXFLAGS = -O2 -fvisibility=hidden -DNDEBUG

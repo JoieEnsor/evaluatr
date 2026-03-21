@@ -1,7 +1,7 @@
-// predict_secure.cpp — C++ Secure Prediction Engine for evaluatr
+// predict_secure.cpp -- C++ Secure Prediction Engine for evaluatr
 //
 // Depends ONLY on Rcpp. No libcurl, no external C libraries.
-// This file implements the full decode → de-obfuscate → predict → shuffle → wipe
+// This file implements the full decode -> de-obfuscate -> predict -> shuffle -> wipe
 // pipeline so that model coefficients never exist as readable R objects.
 
 // [[Rcpp::depends(Rcpp)]]
@@ -17,7 +17,7 @@
 using namespace Rcpp;
 
 // ============================================================
-// INTERNAL SALT — baked into the compiled binary.
+// INTERNAL SALT -- baked into the compiled binary.
 // Neither salt alone nor key alone is sufficient to de-obfuscate.
 // ============================================================
 static const uint64_t SALT_A = UINT64_C(0x9e3779b97f4a7c15);
@@ -222,7 +222,7 @@ static std::vector<double> parse_number_array(const std::string& s, size_t& pos)
 }
 
 // ============================================================
-// MODEL SPEC — parsed from JSON
+// MODEL SPEC -- parsed from JSON
 // ============================================================
 struct CoeffCategory {
   std::string category_name;
@@ -771,7 +771,7 @@ List extract_model_metadata_cpp(std::string encoded_content) {
 //' @param model_params Named list (or NULL) with additional model parameters
 //'   passed from R for reference: timepoints, baseline_survival, etc.
 //'   (Actually these are parsed from JSON; the R list is used only for
-//'   future extensibility and is currently ignored — parameters come from JSON.)
+//'   future extensibility and is currently ignored -- parameters come from JSON.)
 //' @return A named R list with shuffled_outcomes, shuffled_predictions (logistic)
 //'   or prediction_matrix (multi-column), shuffled_by (if by_vec non-null).
 //'
@@ -896,7 +896,7 @@ List predict_from_encoded_cpp(std::string encoded_content,
   bool has_by = !Rf_isNull(by_vec);
   result["has_by"] = has_by;
   if (has_by) {
-    // by_vec can be character or numeric — pass through as-is
+    // by_vec can be character or numeric -- pass through as-is
     SEXP by_shuffled;
     PROTECT(by_shuffled = Rf_allocVector(TYPEOF(by_vec), n));
     for (int i = 0; i < n; i++) {

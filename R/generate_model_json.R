@@ -1,4 +1,4 @@
-# generate_model_json.R — Developer utility for creating obfuscated model JSON files
+# generate_model_json.R -- Developer utility for creating obfuscated model JSON files
 #
 # Exports: generate_model_json()
 # Internal helpers: .extract_from_glm(), .extract_from_coxph(),
@@ -115,7 +115,7 @@
   # coef() for multinom returns a matrix (k-1 rows x p cols) when k >= 3
   # or a named vector when k == 2. Normalise to matrix.
   if (is.vector(coef_mat)) {
-    # Two-category outcome — only one non-reference row
+    # Two-category outcome -- only one non-reference row
     coef_mat <- matrix(coef_mat, nrow = 1,
                        dimnames = list(model$lev[2], names(coef_mat)))
   }
@@ -160,7 +160,7 @@
   is_encrypted <- identical(json_list$metadata$encryption, "aes256gcm")
 
   if (is_encrypted) {
-    # obfuscation_key is held by the key service — not written to the JSON file
+    # obfuscation_key is held by the key service -- not written to the JSON file
     required_top <- c("model_type", "encrypted_coefficients", "encryption_iv", "metadata")
   } else {
     required_top <- c("model_type", "obfuscation_key", "coefficients", "metadata")
@@ -186,7 +186,7 @@
     stop("metadata$variables must contain at least one predictor variable name")
   }
 
-  # Validate coefficients non-empty (skip for encrypted format — ciphertext is present instead)
+  # Validate coefficients non-empty (skip for encrypted format -- ciphertext is present instead)
   if (!is_encrypted) {
     if (json_list$model_type == "multinomial") {
       if (length(json_list$coefficients) == 0) {
@@ -275,7 +275,7 @@
     )
   } else {
     # Phase 3b encrypted path: store ciphertext instead of plain coefficients.
-    # obfuscation_key is NOT written to the JSON — it is held exclusively by
+    # obfuscation_key is NOT written to the JSON -- it is held exclusively by
     # the key service and returned at validation time alongside the AES key.
     structure <- list(
       model_type             = model_type,
@@ -646,7 +646,7 @@ generate_model_json <- function(
   if (!is.null(preprocessing) && nzchar(preprocessing)) {
     message("  preprocessing: <included>")
   }
-  message("  obfuscation_key: <held by key service — not stored in JSON>")
+  message("  obfuscation_key: <held by key service -- not stored in JSON>")
   message("  encryption     : aes256gcm")
   message("NOTE: Coefficients are AES-256-GCM encrypted (key held by key service) ",
           "and obfuscated (protected by compiled C++ binary salt). ",

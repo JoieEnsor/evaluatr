@@ -1,8 +1,8 @@
-# predict_secure_helpers.R — R-side orchestration for the C++ secure engine
+# predict_secure_helpers.R -- R-side orchestration for the C++ secure engine
 #
 # All functions are internal (. prefix). They orchestrate the flow:
-#   encoded_content (base64 string) → metadata → preprocessing → design matrix
-#   → C++ prediction + shuffle → evaluatr_result
+#   encoded_content (base64 string) -> metadata -> preprocessing -> design matrix
+#   -> C++ prediction + shuffle -> evaluatr_result
 
 # ---- .run_preprocessing() ---------------------------------------------------
 # Run developer preprocessing code in a restricted environment.
@@ -42,7 +42,7 @@
 .build_design_matrix <- function(validation_data, variable_names, has_intercept = TRUE) {
   n <- nrow(validation_data)
 
-  # Remove "(Intercept)" from variable list — it is a column we generate
+  # Remove "(Intercept)" from variable list -- it is a column we generate
   pred_vars <- variable_names[variable_names != "(Intercept)"]
 
   missing_vars <- setdiff(pred_vars, names(validation_data))
@@ -117,7 +117,7 @@
 
 
 # ---- .predict_secure() ------------------------------------------------------
-# Main orchestrator — calls C++ engine and packages result as evaluatr_result.
+# Main orchestrator -- calls C++ engine and packages result as evaluatr_result.
 #
 # @param encoded_content Character. Raw base64-encoded JSON from GitHub API.
 # @param validation_data Data frame.

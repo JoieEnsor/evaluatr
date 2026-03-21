@@ -35,7 +35,7 @@
 #' @param model_params Named list (or NULL) with additional model parameters
 #'   passed from R for reference: timepoints, baseline_survival, etc.
 #'   (Actually these are parsed from JSON; the R list is used only for
-#'   future extensibility and is currently ignored — parameters come from JSON.)
+#'   future extensibility and is currently ignored -- parameters come from JSON.)
 #' @return A named R list with shuffled_outcomes, shuffled_predictions (logistic)
 #'   or prediction_matrix (multi-column), shuffled_by (if by_vec non-null).
 #'

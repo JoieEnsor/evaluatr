@@ -1,4 +1,4 @@
-# key_service.R — Internal functions for evaluatr key service integration
+# key_service.R -- Internal functions for evaluatr key service integration
 #
 # Base URL is read from getOption("evaluatr.key_service_url"), falling back
 # to the production URL. Override in tests or local development:

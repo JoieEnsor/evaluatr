@@ -1,9 +1,4 @@
 # src/Makevars -- compiler hardening for evaluatr
 #
-# -fvisibility=hidden  : only [[Rcpp::export]]-annotated symbols are exported
-#                        from the shared library; internal functions (parse_model_json,
-#                        deobfuscate_coeffs, etc.) are invisible to nm/objdump.
-# -O2                  : optimisations (inlining, loop unrolling) make disassembly
-#                        harder to follow.
 # -DNDEBUG             : disables assert() and other debug-build paths.
-PKG_CXXFLAGS = -O2 -fvisibility=hidden -DNDEBUG
+PKG_CXXFLAGS = -DNDEBUG

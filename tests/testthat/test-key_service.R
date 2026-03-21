@@ -35,9 +35,10 @@ test_that("successful registration returns 64-char hex encryption_key", {
 
   result <- with_mocked_bindings(
     .register_model_with_key_service(
-      model_id     = "test_model_001",
-      developer_id = "JoieEnsor",
-      model_name   = "Test Model"
+      model_id        = "test_model_001",
+      developer_id    = "JoieEnsor",
+      model_name      = "Test Model",
+      obfuscation_key = paste0(rep("a", 32), collapse = "")
     ),
     curl_fetch_memory = function(url, handle) mock_response,
     .package = "curl"
@@ -58,9 +59,10 @@ test_that("duplicate model_id (409) stops with informative error", {
   expect_error(
     with_mocked_bindings(
       .register_model_with_key_service(
-        model_id     = "test_model_001",
-        developer_id = "JoieEnsor",
-        model_name   = "Test Model"
+        model_id        = "test_model_001",
+        developer_id    = "JoieEnsor",
+        model_name      = "Test Model",
+        obfuscation_key = paste0(rep("a", 32), collapse = "")
       ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
@@ -75,9 +77,10 @@ test_that("non-200 non-409 response from /register stops with error", {
   expect_error(
     with_mocked_bindings(
       .register_model_with_key_service(
-        model_id     = "test_model_001",
-        developer_id = "JoieEnsor",
-        model_name   = "Test Model"
+        model_id        = "test_model_001",
+        developer_id    = "JoieEnsor",
+        model_name      = "Test Model",
+        obfuscation_key = paste0(rep("a", 32), collapse = "")
       ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
@@ -90,9 +93,10 @@ test_that("unreachable service stops with informative error", {
   expect_error(
     with_mocked_bindings(
       .register_model_with_key_service(
-        model_id     = "test_model_001",
-        developer_id = "JoieEnsor",
-        model_name   = "Test Model"
+        model_id        = "test_model_001",
+        developer_id    = "JoieEnsor",
+        model_name      = "Test Model",
+        obfuscation_key = paste0(rep("a", 32), collapse = "")
       ),
       curl_fetch_memory = function(url, handle) stop("Could not connect"),
       .package = "curl"
@@ -110,9 +114,10 @@ test_that("registration fails with short key (< 64 chars) from service", {
   expect_error(
     with_mocked_bindings(
       .register_model_with_key_service(
-        model_id     = "test_model_001",
-        developer_id = "JoieEnsor",
-        model_name   = "Test Model"
+        model_id        = "test_model_001",
+        developer_id    = "JoieEnsor",
+        model_name      = "Test Model",
+        obfuscation_key = paste0(rep("a", 32), collapse = "")
       ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
@@ -125,8 +130,12 @@ test_that("registration fails with short key (< 64 chars) from service", {
 # .fetch_decryption_key() unit tests
 # ============================================================
 
-test_that("successful key fetch returns 64-char hex string", {
-  mock_response <- make_curl_response(200, list(encryption_key = dummy_key))
+test_that("successful key fetch returns list with encryption_key and obfuscation_key", {
+  dummy_obf_key <- paste0(rep("b", 32), collapse = "")
+  mock_response <- make_curl_response(200, list(
+    encryption_key  = dummy_key,
+    obfuscation_key = dummy_obf_key
+  ))
 
   result <- with_mocked_bindings(
     .fetch_decryption_key(model_id = "test_model_001", n = 500L),
@@ -134,9 +143,11 @@ test_that("successful key fetch returns 64-char hex string", {
     .package = "curl"
   )
 
-  expect_type(result, "character")
-  expect_equal(nchar(result), 64)
-  expect_equal(result, dummy_key)
+  expect_type(result, "list")
+  expect_equal(nchar(result$encryption_key), 64)
+  expect_equal(result$encryption_key, dummy_key)
+  expect_equal(nchar(result$obfuscation_key), 32)
+  expect_equal(result$obfuscation_key, dummy_obf_key)
 })
 
 test_that("unknown model_id (404) stops with informative error", {
@@ -178,8 +189,11 @@ test_that("unreachable service at /key stops with informative error", {
   )
 })
 
-test_that("key fetch fails with short key (< 64 chars) from service", {
-  mock_response <- make_curl_response(200, list(encryption_key = "bad"))
+test_that("key fetch fails with short encryption_key (< 64 chars) from service", {
+  mock_response <- make_curl_response(200, list(
+    encryption_key  = "bad",
+    obfuscation_key = paste0(rep("b", 32), collapse = "")
+  ))
 
   expect_error(
     with_mocked_bindings(
@@ -187,7 +201,23 @@ test_that("key fetch fails with short key (< 64 chars) from service", {
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
     ),
-    "invalid key"
+    "invalid encryption key"
+  )
+})
+
+test_that("key fetch fails with missing or short obfuscation_key from service", {
+  mock_response <- make_curl_response(200, list(
+    encryption_key  = dummy_key,
+    obfuscation_key = "tooshort"
+  ))
+
+  expect_error(
+    with_mocked_bindings(
+      .fetch_decryption_key(model_id = "test_model_001", n = 100L),
+      curl_fetch_memory = function(url, handle) mock_response,
+      .package = "curl"
+    ),
+    "invalid obfuscation key"
   )
 })
 
@@ -220,7 +250,10 @@ mock_fetch_logistic_ks <- function(api_url, token) {
 }
 
 mock_fetch_decryption_key_ok <- function(model_id, n) {
-  dummy_key
+  list(
+    encryption_key  = dummy_key,
+    obfuscation_key = paste0(rep("b", 32), collapse = "")
+  )
 }
 
 test_that("secure_model_validation() succeeds with key service mocked", {
@@ -289,7 +322,8 @@ test_that("secure_model_validation() propagates key service error", {
 # Integration: generate_model_json() with key service mocked
 # ============================================================
 
-mock_register_ok <- function(model_id, developer_id, model_name) {
+mock_register_ok <- function(model_id, developer_id, model_name,
+                             obfuscation_key) {
   list(
     encryption_key = dummy_key,
     registered_at  = "2026-03-19T12:00:00Z"
@@ -338,7 +372,8 @@ test_that("generate_model_json() propagates registration error", {
         variables    = c("age"),
         output_dir   = tmp_dir
       ),
-      .register_model_with_key_service = function(model_id, developer_id, model_name) {
+      .register_model_with_key_service = function(model_id, developer_id,
+                                                     model_name, obfuscation_key) {
         stop("evaluatr key service: model_id 'duplicate_model' is already registered.")
       },
       .package = "evaluatr"

@@ -3,7 +3,7 @@
 #' A de-identified validation dataset (N = 1,500) for use with the ADNEX
 #' (Assessment of Different NEoplasias in the adneXa) model, included with
 #' evaluatr for use in package examples and vignettes. Provided by Dr Lasai
-#' Barreñada, KU Leuven.
+#' Barrenada, KU Leuven.
 #'
 #' @format An RDS file containing a data frame with 1,500 rows and 33 columns.
 #'   Key columns are:
@@ -13,10 +13,10 @@
 #'     model only.}
 #'   \item{max_diam_lesion}{Numeric. Maximum diameter of the lesion (mm).}
 #'   \item{prop_solid}{Numeric. Proportion of the lesion that is solid
-#'     (0–1 scale).}
+#'     (0-1 scale).}
 #'   \item{locules_gt_10}{Integer. Whether the number of locules exceeds 10
 #'     (0 = no, 1 = yes).}
-#'   \item{papillary_count}{Integer. Number of papillary projections (0–4+).}
+#'   \item{papillary_count}{Integer. Number of papillary projections (0-4+).}
 #'   \item{acoustic_shadows}{Integer. Presence of acoustic shadows on ultrasound
 #'     (0 = absent, 1 = present).}
 #'   \item{ascites}{Integer. Presence of ascites (0 = absent, 1 = present).}
@@ -24,7 +24,7 @@
 #'     oncology centre (0 = no, 1 = yes).}
 #'   \item{outcome5}{Integer. Five-category outcome classification:
 #'     1 = benign, 2 = borderline, 3 = stage I invasive,
-#'     4 = stage II–IV invasive, 5 = secondary metastatic.}
+#'     4 = stage II-IV invasive, 5 = secondary metastatic.}
 #'   \item{pbenw, pborw, pst1w, pst2_4w, pmetaw}{Numeric. Reference
 #'     predictions from the ADNEX-with-CA-125 model (developer-computed,
 #'     for verification).}
@@ -44,7 +44,7 @@
 #' early and advanced stage invasive, and secondary metastatic tumours.
 #' *BMJ* **349**: g5920. \doi{10.1136/bmj.g5920}
 #'
-#' @source Provided by Dr Lasai Barreñada, Department of Public Health and
+#' @source Provided by Dr Lasai Barrenada, Department of Public Health and
 #'   Primary Care, KU Leuven. De-identified for package distribution.
 #'
 #' @seealso [secure_model_validation()], the developer guide vignette.

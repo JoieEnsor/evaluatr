@@ -6,3 +6,12 @@
 .httr-oauth
 .DS_Store
 .quarto
+
+# Compiled build artifacts
+src/*.o
+src/*.dll
+src/*.so
+src/*.a
+
+# Test output
+tests/testthat/Rplots.pdf

@@ -1,0 +1,4 @@
+# src/Makevars -- compiler hardening for evaluatr
+#
+# -DNDEBUG             : disables assert() and other debug-build paths.
+PKG_CXXFLAGS = -DNDEBUG

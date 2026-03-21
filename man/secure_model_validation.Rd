@@ -61,7 +61,7 @@ evaluator's dataset, without exposing model coefficients or transmitting
 patient data.
 }
 \details{
-The function enforces a minimum dataset size of 20 observations (per
+The function enforces a minimum dataset size of 50 observations (per
 subgroup when \code{by} is used). Predictions are shuffled before being
 returned so that they cannot be matched back to individual patient records,
 preventing reverse-engineering of model coefficients and ensuring the

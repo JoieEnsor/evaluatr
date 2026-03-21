@@ -1,16 +1,8 @@
-# key_service.R — Internal functions for evaluatr key service integration
-#
-# These functions provide the mandatory chokepoint that logs every model
-# registration and every validation run. No patient data is transmitted;
-# only the integer sample size (n) is sent.
+# key_service.R -- Internal functions for evaluatr key service integration
 #
 # Base URL is read from getOption("evaluatr.key_service_url"), falling back
 # to the production URL. Override in tests or local development:
 #   options(evaluatr.key_service_url = "http://localhost:8000")
-#
-# Internal functions (not exported):
-#   .register_model_with_key_service(model_id, developer_id, model_name)
-#   .fetch_decryption_key(model_id, n)
 
 # ---- .key_service_url() -----------------------------------------------------
 # Return the configured key service base URL (no trailing slash).
@@ -25,20 +17,21 @@
 # ---- .register_model_with_key_service() -------------------------------------
 #
 # Called by generate_model_json() once per model.
-# POSTs to /register with model_id, developer_id, model_name.
-# Returns a list with $encryption_key (64-char hex) and $registered_at.
+# Returns a list with $encryption_key and $registered_at.
 # Stops with an informative error on failure.
 
-.register_model_with_key_service <- function(model_id, developer_id, model_name) {
+.register_model_with_key_service <- function(model_id, developer_id, model_name,
+                                             obfuscation_key) {
 
   base_url <- .key_service_url()
   endpoint <- paste0(base_url, "/register")
 
   body_json <- jsonlite::toJSON(
     list(
-      model_id     = jsonlite::unbox(model_id),
-      developer_id = jsonlite::unbox(developer_id),
-      model_name   = jsonlite::unbox(model_name)
+      model_id        = jsonlite::unbox(model_id),
+      developer_id    = jsonlite::unbox(developer_id),
+      model_name      = jsonlite::unbox(model_name),
+      obfuscation_key = jsonlite::unbox(obfuscation_key)
     ),
     auto_unbox = FALSE
   )
@@ -99,8 +92,7 @@
 # ---- .fetch_decryption_key() ------------------------------------------------
 #
 # Called by secure_model_validation() after the GitHub fetch.
-# POSTs to /key with model_id, pkg_version, r_version, n_observations.
-# Returns the encryption key string (64-char hex).
+# Returns a list with $encryption_key and $obfuscation_key.
 # Stops with an informative error on failure.
 
 .fetch_decryption_key <- function(model_id, n) {
@@ -160,9 +152,16 @@
   }
 
   if (is.null(resp_body$encryption_key) || nchar(resp_body$encryption_key) != 64) {
-    stop("evaluatr key service returned an invalid key. ",
+    stop("evaluatr key service returned an invalid encryption key. ",
+         "Contact the package maintainer.", call. = FALSE)
+  }
+  if (is.null(resp_body$obfuscation_key) || nchar(resp_body$obfuscation_key) != 32) {
+    stop("evaluatr key service returned an invalid obfuscation key. ",
          "Contact the package maintainer.", call. = FALSE)
   }
 
-  resp_body$encryption_key
+  list(
+    encryption_key  = resp_body$encryption_key,
+    obfuscation_key = resp_body$obfuscation_key
+  )
 }

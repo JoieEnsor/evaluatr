@@ -28,7 +28,7 @@
 \item{model_params}{Named list (or NULL) with additional model parameters
 passed from R for reference: timepoints, baseline_survival, etc.
 (Actually these are parsed from JSON; the R list is used only for
-future extensibility and is currently ignored — parameters come from JSON.)}
+future extensibility and is currently ignored -- parameters come from JSON.)}
 }
 \value{
 A named R list with shuffled_outcomes, shuffled_predictions (logistic)

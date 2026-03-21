@@ -757,3 +757,129 @@ test_that(".generate_obfuscation_key produces unique values", {
   keys <- replicate(10, evaluatr:::.generate_obfuscation_key())
   expect_equal(length(unique(keys)), 10)
 })
+
+
+# =============================================================================
+# 15. Phase 3b: AES-256-GCM encryption / decryption
+# =============================================================================
+
+# Helper: build an encrypted logistic JSON (base64-encoded, GitHub format)
+# Improvement B: obfuscation_key is NOT stored in the JSON — it is held by
+# the key service and injected at runtime by .decrypt_coefficients_in_json().
+make_encrypted_logistic_json <- function(enc_key_hex, obf_key = NULL) {
+  real_coeffs <- c("(Intercept)" = -1.25, "age" = 0.02, "biomarker_score" = 0.8)
+  if (is.null(obf_key)) obf_key <- evaluatr:::.generate_obfuscation_key()
+  obf_coeffs  <- as.list(evaluatr:::.obfuscate_coefficients(real_coeffs, obf_key))
+  coeff_json  <- toJSON(obf_coeffs, auto_unbox = TRUE)
+
+  key_raw    <- evaluatr:::.hex_to_raw(enc_key_hex)
+  iv         <- openssl::rand_bytes(12)
+  ciphertext <- openssl::aes_gcm_encrypt(charToRaw(coeff_json), key_raw, iv)
+
+  json_list <- list(
+    model_type             = "logistic",
+    encrypted_coefficients = openssl::base64_encode(ciphertext),
+    encryption_iv          = openssl::base64_encode(iv),
+    preprocessing          = NULL,
+    model_parameters       = NULL,
+    metadata               = list(
+      model_name   = "Encrypted Logistic",
+      version      = "1.0",
+      outcome_type = "binary",
+      variables    = c("age", "biomarker_score"),
+      description  = "Encrypted test model",
+      encryption   = "aes256gcm"
+    )
+  )
+
+  openssl::base64_encode(charToRaw(
+    toJSON(json_list, auto_unbox = TRUE, null = "null", digits = 10)
+  ))
+}
+
+test_that("Phase 3b: .decrypt_coefficients_in_json decrypts correctly", {
+  enc_key_hex <- paste0(rep("a", 64), collapse = "")
+  obf_key     <- evaluatr:::.generate_obfuscation_key()
+  encoded     <- make_encrypted_logistic_json(enc_key_hex, obf_key = obf_key)
+
+  # Pass both keys (Improvement B: obfuscation_key from key service)
+  result <- evaluatr:::.decrypt_coefficients_in_json(encoded, enc_key_hex,
+                                                     obf_key)
+
+  parsed <- jsonlite::fromJSON(rawToChar(openssl::base64_decode(result)),
+                               simplifyVector = FALSE)
+  expect_true("coefficients" %in% names(parsed))
+  expect_false("encrypted_coefficients" %in% names(parsed))
+  expect_false("encryption_iv" %in% names(parsed))
+  expect_null(parsed$metadata$encryption)
+  expect_true("(Intercept)" %in% names(parsed$coefficients))
+  # obfuscation_key injected into decrypted JSON for C++ engine
+  expect_equal(parsed$obfuscation_key, obf_key)
+})
+
+test_that("Phase 3b: .decrypt_coefficients_in_json passes unencrypted JSON unchanged", {
+  enc_key_hex <- paste0(rep("b", 64), collapse = "")
+  # Unencrypted v1 JSON
+  encoded     <- make_logistic_json(obfuscated = TRUE,
+                                    key = evaluatr:::.generate_obfuscation_key())
+
+  result <- evaluatr:::.decrypt_coefficients_in_json(encoded, enc_key_hex)
+
+  # Parse both and compare coefficients field exists
+  parsed_orig   <- jsonlite::fromJSON(rawToChar(openssl::base64_decode(
+    gsub("\n", "", encoded))), simplifyVector = FALSE)
+  parsed_result <- jsonlite::fromJSON(rawToChar(openssl::base64_decode(result)),
+                                      simplifyVector = FALSE)
+  expect_true("coefficients" %in% names(parsed_result))
+  expect_null(parsed_result$metadata$encryption)
+})
+
+test_that("Phase 3b: wrong key causes decryption error", {
+  correct_key <- paste0(rep("c", 64), collapse = "")
+  wrong_key   <- paste0(rep("d", 64), collapse = "")
+  obf_key     <- evaluatr:::.generate_obfuscation_key()
+  encoded     <- make_encrypted_logistic_json(correct_key, obf_key = obf_key)
+
+  expect_error(
+    evaluatr:::.decrypt_coefficients_in_json(encoded, wrong_key, obf_key)
+  )
+})
+
+test_that("Phase 3b: .predict_secure with correct key gives same predictions as unencrypted", {
+  set.seed(999)
+  df          <- make_binary_data(n = 80)
+  enc_key_hex <- paste0(rep("e", 64), collapse = "")
+  obf_key     <- evaluatr:::.generate_obfuscation_key()
+
+  # Unencrypted path (obfuscation_key embedded in JSON — v1 backward compat)
+  enc_plain    <- make_logistic_json(obfuscated = TRUE, key = obf_key)
+  result_plain <- evaluatr:::.predict_secure(enc_plain, df, "outcome",
+                                             model_id = "plain_test")
+
+  # Encrypted path — obfuscation_key held by key service (Improvement B),
+  # not present in the JSON; passed as separate argument.
+  enc_enc    <- make_encrypted_logistic_json(enc_key_hex, obf_key = obf_key)
+  result_enc <- evaluatr:::.predict_secure(enc_enc, df, "outcome",
+                                           model_id = "enc_test",
+                                           decryption_key  = enc_key_hex,
+                                           obfuscation_key = obf_key)
+
+  # Both should produce the same predictions (sorted, since shuffle is random)
+  expect_equal(sort(round(result_plain$shuffled_predictions, 6)),
+               sort(round(result_enc$shuffled_predictions, 6)),
+               tolerance = 1e-4,
+               label = "encrypted and unencrypted predictions match")
+})
+
+test_that("Phase 3b: .predict_secure backward compat — empty key skips decryption", {
+  df  <- make_binary_data()
+  enc <- make_logistic_json(obfuscated = FALSE)
+
+  # Should work without a decryption key (unencrypted v1 JSON)
+  expect_no_error({
+    result <- evaluatr:::.predict_secure(enc, df, "outcome",
+                                         model_id = "backcompat",
+                                         decryption_key = "")
+  })
+  expect_s3_class(result, "evaluatr_result")
+})

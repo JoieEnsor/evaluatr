@@ -186,13 +186,23 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
     stop(raw_result$error)
   }
 
-  # ---- Retrieve keys and log validation event --------------------------------
+  # ---- Retrieve decryption key and log validation event ----------------------
+  # Worker A validates the GitHub token, logs the validation event, and returns
+  # the AES-256 decryption key. The obfuscation key and per-model salts are
+  # fetched directly from Worker B by the C++ engine in Phase 2 — they are
+  # never returned to R.
   keys <- .fetch_decryption_key(
-    model_id = model_id,
-    n        = nrow(validation_data)
+    model_id     = model_id,
+    n            = nrow(validation_data),
+    github_token = github_token,
+    repo_owner   = repo_owner,
+    repo_name    = repo_name
   )
 
   # ---- Run prediction engine -------------------------------------------------
+  # github_token, repo_owner, repo_name are passed into C++ so that Worker B
+  # is called from within the compiled engine — the obfuscation key and
+  # per-model salts never appear as R objects.
   result <- .predict_secure(
     encoded_content = raw_result$encoded_content,
     validation_data = validation_data,
@@ -200,7 +210,9 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
     by              = by,
     model_id        = model_id,
     decryption_key  = keys$encryption_key,
-    obfuscation_key = keys$obfuscation_key
+    github_token    = github_token,
+    repo_owner      = repo_owner,
+    repo_name       = repo_name
   )
 
   return(result)

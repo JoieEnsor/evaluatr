@@ -21,7 +21,7 @@
 # Stops with an informative error on failure.
 
 .register_model_with_key_service <- function(model_id, developer_id, model_name,
-                                             obfuscation_key) {
+                                             obfuscation_key, salt_a, salt_b) {
 
   base_url <- .key_service_url()
   endpoint <- paste0(base_url, "/register")
@@ -31,7 +31,9 @@
       model_id        = jsonlite::unbox(model_id),
       developer_id    = jsonlite::unbox(developer_id),
       model_name      = jsonlite::unbox(model_name),
-      obfuscation_key = jsonlite::unbox(obfuscation_key)
+      obfuscation_key = jsonlite::unbox(obfuscation_key),
+      salt_a          = jsonlite::unbox(salt_a),
+      salt_b          = jsonlite::unbox(salt_b)
     ),
     auto_unbox = FALSE
   )
@@ -92,10 +94,12 @@
 # ---- .fetch_decryption_key() ------------------------------------------------
 #
 # Called by secure_model_validation() after the GitHub fetch.
-# Returns a list with $encryption_key and $obfuscation_key.
+# Sends the evaluator's GitHub token to Worker A for validation.
+# Returns a list with $encryption_key only (obfuscation key and salts are
+# fetched directly from Worker B by the C++ engine in Phase 2).
 # Stops with an informative error on failure.
 
-.fetch_decryption_key <- function(model_id, n) {
+.fetch_decryption_key <- function(model_id, n, github_token, repo_owner, repo_name) {
 
   base_url <- .key_service_url()
   endpoint <- paste0(base_url, "/key")
@@ -103,6 +107,9 @@
   body_json <- jsonlite::toJSON(
     list(
       model_id       = jsonlite::unbox(model_id),
+      github_token   = jsonlite::unbox(github_token),
+      repo_owner     = jsonlite::unbox(repo_owner),
+      repo_name      = jsonlite::unbox(repo_name),
       pkg_version    = jsonlite::unbox(as.character(utils::packageVersion("evaluatr"))),
       r_version      = jsonlite::unbox(R.version.string),
       n_observations = jsonlite::unbox(as.integer(n))
@@ -139,6 +146,19 @@
                                             rawToChar(response$content)))
   )
 
+  if (response$status_code == 401) {
+    stop("evaluatr key service: GitHub token validation failed. ",
+         "Check that your token is valid and has read access to '",
+         repo_owner, "/", repo_name, "'.",
+         call. = FALSE)
+  }
+
+  if (response$status_code == 429) {
+    stop("evaluatr key service: rate limit exceeded for this token and model. ",
+         "Contact the model developer to obtain a new token.",
+         call. = FALSE)
+  }
+
   if (response$status_code == 404) {
     stop("evaluatr key service: model '", model_id, "' is not registered. ",
          "The developer must run generate_model_json() before the model can be validated.",
@@ -155,13 +175,8 @@
     stop("evaluatr key service returned an invalid encryption key. ",
          "Contact the package maintainer.", call. = FALSE)
   }
-  if (is.null(resp_body$obfuscation_key) || nchar(resp_body$obfuscation_key) != 32) {
-    stop("evaluatr key service returned an invalid obfuscation key. ",
-         "Contact the package maintainer.", call. = FALSE)
-  }
 
   list(
-    encryption_key  = resp_body$encryption_key,
-    obfuscation_key = resp_body$obfuscation_key
+    encryption_key = resp_body$encryption_key
   )
 }

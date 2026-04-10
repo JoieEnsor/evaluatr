@@ -1,4 +1,7 @@
-# src/Makevars -- compiler hardening for evaluatr
+# src/Makevars -- Unix/macOS compiler flags for evaluatr
 #
 # -DNDEBUG             : disables assert() and other debug-build paths.
+# -Wl,-s               : strip debug symbols from the shared object at link time.
+# PKG_LIBS             : link libcurl (declared in DESCRIPTION SystemRequirements).
 PKG_CXXFLAGS = -DNDEBUG
+PKG_LIBS = -lcurl -Wl,-s

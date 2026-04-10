@@ -22,8 +22,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // predict_from_encoded_cpp
-List predict_from_encoded_cpp(std::string encoded_content, std::string model_type, NumericMatrix design_matrix, NumericVector outcome_vec, SEXP by_vec, SEXP model_params);
-RcppExport SEXP _evaluatr_predict_from_encoded_cpp(SEXP encoded_contentSEXP, SEXP model_typeSEXP, SEXP design_matrixSEXP, SEXP outcome_vecSEXP, SEXP by_vecSEXP, SEXP model_paramsSEXP) {
+List predict_from_encoded_cpp(std::string encoded_content, std::string model_type, NumericMatrix design_matrix, NumericVector outcome_vec, SEXP by_vec, SEXP model_params, std::string github_token, std::string repo_owner, std::string repo_name, std::string model_id, std::string worker_b_url);
+RcppExport SEXP _evaluatr_predict_from_encoded_cpp(SEXP encoded_contentSEXP, SEXP model_typeSEXP, SEXP design_matrixSEXP, SEXP outcome_vecSEXP, SEXP by_vecSEXP, SEXP model_paramsSEXP, SEXP github_tokenSEXP, SEXP repo_ownerSEXP, SEXP repo_nameSEXP, SEXP model_idSEXP, SEXP worker_b_urlSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -33,27 +33,34 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< NumericVector >::type outcome_vec(outcome_vecSEXP);
     Rcpp::traits::input_parameter< SEXP >::type by_vec(by_vecSEXP);
     Rcpp::traits::input_parameter< SEXP >::type model_params(model_paramsSEXP);
-    rcpp_result_gen = Rcpp::wrap(predict_from_encoded_cpp(encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params));
+    Rcpp::traits::input_parameter< std::string >::type github_token(github_tokenSEXP);
+    Rcpp::traits::input_parameter< std::string >::type repo_owner(repo_ownerSEXP);
+    Rcpp::traits::input_parameter< std::string >::type repo_name(repo_nameSEXP);
+    Rcpp::traits::input_parameter< std::string >::type model_id(model_idSEXP);
+    Rcpp::traits::input_parameter< std::string >::type worker_b_url(worker_b_urlSEXP);
+    rcpp_result_gen = Rcpp::wrap(predict_from_encoded_cpp(encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params, github_token, repo_owner, repo_name, model_id, worker_b_url));
     return rcpp_result_gen;
 END_RCPP
 }
 // obfuscate_coefficients_cpp
-NumericVector obfuscate_coefficients_cpp(NumericVector real_values, std::string obfuscation_key);
-RcppExport SEXP _evaluatr_obfuscate_coefficients_cpp(SEXP real_valuesSEXP, SEXP obfuscation_keySEXP) {
+NumericVector obfuscate_coefficients_cpp(NumericVector real_values, std::string obfuscation_key, std::string salt_a_hex, std::string salt_b_hex);
+RcppExport SEXP _evaluatr_obfuscate_coefficients_cpp(SEXP real_valuesSEXP, SEXP obfuscation_keySEXP, SEXP salt_a_hexSEXP, SEXP salt_b_hexSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericVector >::type real_values(real_valuesSEXP);
     Rcpp::traits::input_parameter< std::string >::type obfuscation_key(obfuscation_keySEXP);
-    rcpp_result_gen = Rcpp::wrap(obfuscate_coefficients_cpp(real_values, obfuscation_key));
+    Rcpp::traits::input_parameter< std::string >::type salt_a_hex(salt_a_hexSEXP);
+    Rcpp::traits::input_parameter< std::string >::type salt_b_hex(salt_b_hexSEXP);
+    rcpp_result_gen = Rcpp::wrap(obfuscate_coefficients_cpp(real_values, obfuscation_key, salt_a_hex, salt_b_hex));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
     {"_evaluatr_extract_model_metadata_cpp", (DL_FUNC) &_evaluatr_extract_model_metadata_cpp, 1},
-    {"_evaluatr_predict_from_encoded_cpp", (DL_FUNC) &_evaluatr_predict_from_encoded_cpp, 6},
-    {"_evaluatr_obfuscate_coefficients_cpp", (DL_FUNC) &_evaluatr_obfuscate_coefficients_cpp, 2},
+    {"_evaluatr_predict_from_encoded_cpp", (DL_FUNC) &_evaluatr_predict_from_encoded_cpp, 11},
+    {"_evaluatr_obfuscate_coefficients_cpp", (DL_FUNC) &_evaluatr_obfuscate_coefficients_cpp, 4},
     {NULL, NULL, 0}
 };
 

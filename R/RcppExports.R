@@ -19,29 +19,25 @@
     .Call(`_evaluatr_extract_model_metadata_cpp`, encoded_content)
 }
 
-#' Full secure prediction pipeline
-#'
-#' @description
-#' Decodes base64 content, de-obfuscates coefficients, computes predictions,
-#' shuffles outcome-prediction pairs, wipes coefficient data, and returns only
-#' the shuffled results. Coefficients never exist as readable R objects.
+#' Secure prediction pipeline
 #'
 #' @param encoded_content Character. Base64-encoded JSON from GitHub API.
 #' @param model_type Character. Model type string from metadata.
-#' @param design_matrix Numeric matrix. Rows = observations, columns = terms
-#'   (intercept first if present, then predictors in order).
+#' @param design_matrix Numeric matrix.
 #' @param outcome_vec Numeric vector. Outcome variable values.
 #' @param by_vec Character/numeric vector (or R NULL). Subgroup variable.
-#' @param model_params Named list (or NULL) with additional model parameters
-#'   passed from R for reference: timepoints, baseline_survival, etc.
-#'   (Actually these are parsed from JSON; the R list is used only for
-#'   future extensibility and is currently ignored -- parameters come from JSON.)
-#' @return A named R list with shuffled_outcomes, shuffled_predictions (logistic)
-#'   or prediction_matrix (multi-column), shuffled_by (if by_vec non-null).
+#' @param model_params Named list (or NULL).
+#' @param github_token Character. Evaluator's GitHub token.
+#' @param repo_owner Character. GitHub repository owner.
+#' @param repo_name Character. GitHub repository name.
+#' @param model_id Character. Model identifier.
+#' @param worker_b_url Character. Key service URL.
+#' @return A named R list with shuffled_outcomes, shuffled_pred_matrix,
+#'   shuffled_by (if by_vec non-null), is_single_col, has_by.
 #'
 #' @keywords internal
-.predict_from_encoded_cpp <- function(encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params) {
-    .Call(`_evaluatr_predict_from_encoded_cpp`, encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params)
+.predict_from_encoded_cpp <- function(encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params, github_token, repo_owner, repo_name, model_id, worker_b_url) {
+    .Call(`_evaluatr_predict_from_encoded_cpp`, encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params, github_token, repo_owner, repo_name, model_id, worker_b_url)
 }
 
 #' Obfuscate coefficient values
@@ -49,15 +45,17 @@
 #' @description
 #' Takes real coefficient values and returns obfuscated values using the
 #' affine transform: stored = (real * mult) + offset, where mult and offset
-#' are deterministically generated from the obfuscation_key plus compiled salts.
-#' Used by the developer utility (Phase 2) when creating model JSON files.
+#' are deterministically generated from the obfuscation_key and per-model
+#' salts. Used by the developer utility when creating model JSON files.
 #'
 #' @param real_values Named numeric vector of real coefficient values.
 #' @param obfuscation_key Character. 32-character hex string.
+#' @param salt_a_hex Character. 16-character hex string (per-model salt A).
+#' @param salt_b_hex Character. 16-character hex string (per-model salt B).
 #' @return Named numeric vector of obfuscated values.
 #'
 #' @keywords internal
-.obfuscate_coefficients_cpp <- function(real_values, obfuscation_key) {
-    .Call(`_evaluatr_obfuscate_coefficients_cpp`, real_values, obfuscation_key)
+.obfuscate_coefficients_cpp <- function(real_values, obfuscation_key, salt_a_hex, salt_b_hex) {
+    .Call(`_evaluatr_obfuscate_coefficients_cpp`, real_values, obfuscation_key, salt_a_hex, salt_b_hex)
 }
 

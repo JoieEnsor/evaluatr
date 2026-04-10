@@ -2,7 +2,7 @@
 % Please edit documentation in R/RcppExports.R
 \name{.predict_from_encoded_cpp}
 \alias{.predict_from_encoded_cpp}
-\title{Full secure prediction pipeline}
+\title{Secure prediction pipeline}
 \usage{
 .predict_from_encoded_cpp(
   encoded_content,
@@ -10,7 +10,12 @@
   design_matrix,
   outcome_vec,
   by_vec,
-  model_params
+  model_params,
+  github_token,
+  repo_owner,
+  repo_name,
+  model_id,
+  worker_b_url
 )
 }
 \arguments{
@@ -18,25 +23,29 @@
 
 \item{model_type}{Character. Model type string from metadata.}
 
-\item{design_matrix}{Numeric matrix. Rows = observations, columns = terms
-(intercept first if present, then predictors in order).}
+\item{design_matrix}{Numeric matrix.}
 
 \item{outcome_vec}{Numeric vector. Outcome variable values.}
 
 \item{by_vec}{Character/numeric vector (or R NULL). Subgroup variable.}
 
-\item{model_params}{Named list (or NULL) with additional model parameters
-passed from R for reference: timepoints, baseline_survival, etc.
-(Actually these are parsed from JSON; the R list is used only for
-future extensibility and is currently ignored -- parameters come from JSON.)}
+\item{model_params}{Named list (or NULL).}
+
+\item{github_token}{Character. Evaluator's GitHub token.}
+
+\item{repo_owner}{Character. GitHub repository owner.}
+
+\item{repo_name}{Character. GitHub repository name.}
+
+\item{model_id}{Character. Model identifier.}
+
+\item{worker_b_url}{Character. Key service URL.}
 }
 \value{
-A named R list with shuffled_outcomes, shuffled_predictions (logistic)
-or prediction_matrix (multi-column), shuffled_by (if by_vec non-null).
+A named R list with shuffled_outcomes, shuffled_pred_matrix,
+shuffled_by (if by_vec non-null), is_single_col, has_by.
 }
 \description{
-Decodes base64 content, de-obfuscates coefficients, computes predictions,
-shuffles outcome-prediction pairs, wipes coefficient data, and returns only
-the shuffled results. Coefficients never exist as readable R objects.
+Secure prediction pipeline
 }
 \keyword{internal}

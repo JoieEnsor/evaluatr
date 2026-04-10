@@ -2,6 +2,7 @@
 
 export(eval_performance)
 export(generate_model_json)
+export(list_registered_models)
 export(secure_model_validation)
 importFrom(CalibrationCurves,val.prob.ci.2)
 importFrom(Rcpp,sourceCpp)

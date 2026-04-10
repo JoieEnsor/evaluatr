@@ -18,6 +18,9 @@ generate_model_json(
   preprocessing = NULL,
   model_parameters = NULL,
   reference_category = NULL,
+  developer_name = NULL,
+  developer_email = NULL,
+  public_listing = TRUE,
   output_dir = ".",
   output_filename = NULL
 )
@@ -71,6 +74,19 @@ the reference category (the category whose coefficients are all zero).
 Required when \code{model_type = "multinomial"} and \code{coefficients} is supplied.
 Inferred automatically from \code{multinom} objects.}
 
+\item{developer_name}{Character or NULL. Your real name (e.g. "Jane Smith").
+Stored in the evaluatr model directory so evaluators can identify the model
+maintainer. Optional.}
+
+\item{developer_email}{Character or NULL. Contact email address for evaluators
+who wish to request a validation token. Optional but recommended if you want
+your model to be discoverable via \code{\link[=list_registered_models]{list_registered_models()}}.}
+
+\item{public_listing}{Logical. Whether to list this model in the public
+evaluatr model directory (returned by \code{\link[=list_registered_models]{list_registered_models()}}). Default
+\code{TRUE}. Set to \code{FALSE} to keep the model registration private (e.g. while
+a paper is under review).}
+
 \item{output_dir}{Character. Directory to write the JSON file. Created if it
 does not exist. Default \code{"."}.}
 
@@ -83,35 +99,18 @@ side effect is writing the JSON file to \code{{output_dir}/{output_filename}}.
 }
 \description{
 Developer-facing utility that accepts a fitted R model object or a manual
-coefficient specification and produces a correctly formatted, obfuscated
-JSON file ready for upload to a private GitHub repository for use with
+coefficient specification and produces a correctly formatted JSON file
+ready for upload to a GitHub repository for use with
 \code{\link[=secure_model_validation]{secure_model_validation()}}.
 
-Coefficients are obfuscated using the Phase 1 C++ engine so that the values
-stored in the JSON file are meaningless without the obfuscation key and the
-compiled binary salt. The obfuscation key is embedded in the JSON file.
+Coefficients are protected so that the values stored in the JSON file
+cannot be recovered without the evaluatr package binaries.
 }
 \details{
-The generated JSON follows the v1 format used by the C++ prediction engine:
-
-\if{html}{\out{<div class="sourceCode json">}}\preformatted{\{
-  "model_type": "logistic",
-  "obfuscation_key": "<32-char hex>",
-  "coefficients": \{ "(Intercept)": <obfuscated>, "age": <obfuscated> \},
-  "preprocessing": null,
-  "model_parameters": null,
-  "metadata": \{
-    "model_id": "...", "model_name": "...", "version": "1.0",
-    "outcome_type": "binary", "variables": ["age"], "description": "..."
-  \}
-\}
-}\if{html}{\out{</div>}}
-
-Coefficient values are obfuscated using an affine transform seeded from the
-obfuscation key and a compiled binary salt. The key is stored in the JSON
-so the C++ engine can de-obfuscate at prediction time; it is NOT a secret,
-but the compiled salt is. Coefficients cannot be recovered without the
-compiled binary.
+The generated JSON file contains protected coefficient values and metadata.
+At validation time, \code{\link[=secure_model_validation]{secure_model_validation()}} reads the file and computes
+predictions internally; the raw coefficient values are never exposed as R
+objects.
 }
 \examples{
 \dontrun{

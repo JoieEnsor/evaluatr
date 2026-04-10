@@ -385,7 +385,7 @@ test_that("secure_model_validation() propagates key service error", {
 # ============================================================
 
 mock_register_ok <- function(model_id, developer_id, model_name,
-                             obfuscation_key, salt_a, salt_b) {
+                             obfuscation_key, salt_a, salt_b, ...) {
   list(
     encryption_key = dummy_key,
     registered_at  = "2026-03-19T12:00:00Z"
@@ -436,7 +436,7 @@ test_that("generate_model_json() propagates registration error", {
       ),
       .register_model_with_key_service = function(model_id, developer_id,
                                                    model_name, obfuscation_key,
-                                                   salt_a, salt_b) {
+                                                   salt_a, salt_b, ...) {
         stop("evaluatr key service: model_id 'duplicate_model' is already registered.")
       },
       .package = "evaluatr"
@@ -483,4 +483,197 @@ test_that("generate_model_json() rejects empty developer_id string", {
     ),
     "developer_id is required"
   )
+})
+
+# ============================================================
+# .register_model_with_key_service() — registry fields
+# ============================================================
+
+test_that("registration forwards optional registry fields", {
+  result <- with_mocked_bindings(
+    .register_model_with_key_service(
+      model_id          = "test_registry_001",
+      developer_id      = "JoeBloggs",
+      model_name        = "Registry Test Model",
+      obfuscation_key   = paste0(rep("b", 32), collapse = ""),
+      salt_a            = dummy_salt_a,
+      salt_b            = dummy_salt_b,
+      developer_name    = "Joe Bloggs",
+      developer_email   = "j.bloggs@example.ac.uk",
+      model_description = "A model for testing the registry",
+      public_listing    = TRUE
+    ),
+    curl_fetch_memory = function(url, handle) {
+      make_curl_response(200, list(
+        encryption_key = dummy_key,
+        registered_at  = "2026-04-10T09:00:00Z"
+      ))
+    },
+    .package = "curl"
+  )
+
+  expect_equal(result$encryption_key, dummy_key)
+})
+
+test_that("registration with public_listing = FALSE is forwarded", {
+  result <- with_mocked_bindings(
+    .register_model_with_key_service(
+      model_id        = "private_model_001",
+      developer_id    = "JoeBloggs",
+      model_name      = "Private Model",
+      obfuscation_key = paste0(rep("c", 32), collapse = ""),
+      salt_a          = dummy_salt_a,
+      salt_b          = dummy_salt_b,
+      public_listing  = FALSE
+    ),
+    curl_fetch_memory = function(url, handle) {
+      make_curl_response(200, list(
+        encryption_key = dummy_key,
+        registered_at  = "2026-04-10T09:00:00Z"
+      ))
+    },
+    .package = "curl"
+  )
+
+  expect_equal(result$encryption_key, dummy_key)
+})
+
+test_that("generate_model_json() forwards registry fields to key service", {
+  tmp_dir <- tempfile()
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE))
+
+  result <- with_mocked_bindings(
+    generate_model_json(
+      coefficients      = c("(Intercept)" = -1.25, age = 0.02),
+      model_type        = "logistic",
+      model_id          = "registry_test_json",
+      developer_id      = "JoeBloggs",
+      model_name        = "Registry JSON Model",
+      outcome_type      = "binary",
+      variables         = c("age"),
+      developer_name    = "Joe Bloggs",
+      developer_email   = "j.bloggs@example.ac.uk",
+      public_listing    = TRUE,
+      output_dir        = tmp_dir
+    ),
+    .register_model_with_key_service = function(model_id, developer_id,
+                                                model_name, obfuscation_key,
+                                                salt_a, salt_b,
+                                                developer_name = NULL,
+                                                developer_email = NULL,
+                                                model_description = NULL,
+                                                public_listing = TRUE) {
+      expect_equal(developer_name, "Joe Bloggs")
+      expect_equal(developer_email, "j.bloggs@example.ac.uk")
+      expect_true(isTRUE(public_listing))
+      list(encryption_key = dummy_key, registered_at = "2026-04-10T09:00:00Z")
+    },
+    .package = "evaluatr"
+  )
+
+  expect_type(result, "list")
+  expect_true(file.exists(file.path(tmp_dir, "coefficients.json")))
+})
+
+# ============================================================
+# list_registered_models()
+# ============================================================
+
+make_public_models_response <- function() {
+  list(
+    n = 2L,
+    models = list(
+      list(
+        model_id          = "aki_v1",
+        model_name        = "AKI Prediction Model",
+        developer_id      = "JoeBloggs",
+        developer_name    = "Joe Bloggs",
+        developer_email   = "j.bloggs@example.ac.uk",
+        model_description = "Predicts AKI from routine bloods",
+        registered_at     = "2026-04-01T10:00:00Z"
+      ),
+      list(
+        model_id          = "adnex_v1",
+        model_name        = "ADNEX Model",
+        developer_id      = "KULeuven",
+        developer_name    = NULL,
+        developer_email   = NULL,
+        model_description = "Ovarian tumour classification",
+        registered_at     = "2026-04-02T11:00:00Z"
+      )
+    )
+  )
+}
+
+test_that("list_registered_models() returns a data.frame with correct columns", {
+  mock_response <- make_curl_response(200, make_public_models_response())
+
+  result <- with_mocked_bindings(
+    list_registered_models(),
+    curl_fetch_memory = function(url, handle) mock_response,
+    .package = "curl"
+  )
+
+  expect_s3_class(result, "data.frame")
+  expect_equal(nrow(result), 2L)
+  expected_cols <- c("model_id", "model_name", "developer_id",
+                     "developer_name", "developer_email",
+                     "model_description")
+  expect_true(all(expected_cols %in% names(result)))
+  expect_false("registered_at" %in% names(result))
+  expect_equal(result$model_id[1], "aki_v1")
+  expect_equal(result$developer_email[1], "j.bloggs@example.ac.uk")
+})
+
+test_that("list_registered_models() returns empty data.frame when no models", {
+  mock_response <- make_curl_response(200, list(n = 0L, models = list()))
+
+  result <- with_mocked_bindings(
+    list_registered_models(),
+    curl_fetch_memory = function(url, handle) mock_response,
+    .package = "curl"
+  )
+
+  expect_s3_class(result, "data.frame")
+  expect_equal(nrow(result), 0L)
+  expect_true("model_id" %in% names(result))
+})
+
+test_that("list_registered_models() stops on HTTP error", {
+  mock_response <- make_curl_response(500, list(error = "Internal server error"))
+
+  expect_error(
+    with_mocked_bindings(
+      list_registered_models(),
+      curl_fetch_memory = function(url, handle) mock_response,
+      .package = "curl"
+    ),
+    "key service error"
+  )
+})
+
+test_that("list_registered_models() stops when service unreachable", {
+  expect_error(
+    with_mocked_bindings(
+      list_registered_models(),
+      curl_fetch_memory = function(url, handle) stop("Connection refused"),
+      .package = "curl"
+    ),
+    "key service unreachable"
+  )
+})
+
+test_that("list_registered_models() with as_data_frame = FALSE returns raw list", {
+  mock_response <- make_curl_response(200, make_public_models_response())
+
+  result <- with_mocked_bindings(
+    list_registered_models(as_data_frame = FALSE),
+    curl_fetch_memory = function(url, handle) mock_response,
+    .package = "curl"
+  )
+
+  expect_type(result, "list")
+  expect_equal(result$n, 2L)
+  expect_type(result$models, "list")
 })

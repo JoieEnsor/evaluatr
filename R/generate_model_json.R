@@ -302,13 +302,12 @@
 #'
 #' @description
 #' Developer-facing utility that accepts a fitted R model object or a manual
-#' coefficient specification and produces a correctly formatted, obfuscated
-#' JSON file ready for upload to a private GitHub repository for use with
+#' coefficient specification and produces a correctly formatted JSON file
+#' ready for upload to a GitHub repository for use with
 #' [secure_model_validation()].
 #'
-#' Coefficients are obfuscated using the Phase 1 C++ engine so that the values
-#' stored in the JSON file are meaningless without the obfuscation key and the
-#' compiled binary salt. The obfuscation key is embedded in the JSON file.
+#' Coefficients are protected so that the values stored in the JSON file
+#' cannot be recovered without the evaluatr package binaries.
 #'
 #' @param model A fitted model object. Supported classes: `glm` (binomial
 #'   family), `coxph`, `survreg` (Weibull/exponential), `multinom` (nnet).
@@ -346,6 +345,16 @@
 #'   the reference category (the category whose coefficients are all zero).
 #'   Required when `model_type = "multinomial"` and `coefficients` is supplied.
 #'   Inferred automatically from `multinom` objects.
+#' @param developer_name Character or NULL. Your real name (e.g. "Jane Smith").
+#'   Stored in the evaluatr model directory so evaluators can identify the model
+#'   maintainer. Optional.
+#' @param developer_email Character or NULL. Contact email address for evaluators
+#'   who wish to request a validation token. Optional but recommended if you want
+#'   your model to be discoverable via [list_registered_models()].
+#' @param public_listing Logical. Whether to list this model in the public
+#'   evaluatr model directory (returned by [list_registered_models()]). Default
+#'   `TRUE`. Set to `FALSE` to keep the model registration private (e.g. while
+#'   a paper is under review).
 #' @param output_dir Character. Directory to write the JSON file. Created if it
 #'   does not exist. Default `"."`.
 #' @param output_filename Character or NULL. Filename for the JSON output.
@@ -355,27 +364,10 @@
 #'   side effect is writing the JSON file to `{output_dir}/{output_filename}`.
 #'
 #' @details
-#' The generated JSON follows the v1 format used by the C++ prediction engine:
-#'
-#' ```json
-#' {
-#'   "model_type": "logistic",
-#'   "obfuscation_key": "<32-char hex>",
-#'   "coefficients": { "(Intercept)": <obfuscated>, "age": <obfuscated> },
-#'   "preprocessing": null,
-#'   "model_parameters": null,
-#'   "metadata": {
-#'     "model_id": "...", "model_name": "...", "version": "1.0",
-#'     "outcome_type": "binary", "variables": ["age"], "description": "..."
-#'   }
-#' }
-#' ```
-#'
-#' Coefficient values are obfuscated using an affine transform seeded from the
-#' obfuscation key and a compiled binary salt. The key is stored in the JSON
-#' so the C++ engine can de-obfuscate at prediction time; it is NOT a secret,
-#' but the compiled salt is. Coefficients cannot be recovered without the
-#' compiled binary.
+#' The generated JSON file contains protected coefficient values and metadata.
+#' At validation time, [secure_model_validation()] reads the file and computes
+#' predictions internally; the raw coefficient values are never exposed as R
+#' objects.
 #'
 #' @examples
 #' \dontrun{
@@ -428,6 +420,9 @@ generate_model_json <- function(
     preprocessing      = NULL,
     model_parameters   = NULL,
     reference_category = NULL,
+    developer_name     = NULL,
+    developer_email    = NULL,
+    public_listing     = TRUE,
     output_dir         = ".",
     output_filename    = NULL
 ) {
@@ -575,12 +570,16 @@ generate_model_json <- function(
   # encryption key (R side) and Worker B returns the obfuscation key + salts
   # (C++ side, Phase 2).
   registration <- .register_model_with_key_service(
-    model_id        = model_id,
-    developer_id    = developer_id,
-    model_name      = model_name,
-    obfuscation_key = obfuscation_key,
-    salt_a          = salt_a,
-    salt_b          = salt_b
+    model_id          = model_id,
+    developer_id      = developer_id,
+    model_name        = model_name,
+    obfuscation_key   = obfuscation_key,
+    salt_a            = salt_a,
+    salt_b            = salt_b,
+    developer_name    = developer_name,
+    developer_email   = developer_email,
+    model_description = description,
+    public_listing    = public_listing
   )
 
   # ---- Phase 3b: AES-256-GCM encrypt the obfuscated coefficients -------------
@@ -665,11 +664,8 @@ generate_model_json <- function(
   if (!is.null(preprocessing) && nzchar(preprocessing)) {
     message("  preprocessing: <included>")
   }
-  message("  obfuscation_key: <held by key service -- not stored in JSON>")
-  message("  encryption     : aes256gcm")
-  message("NOTE: Coefficients are AES-256-GCM encrypted (key held by key service) ",
-          "and obfuscated (protected by compiled C++ binary salt). ",
-          "Keep the JSON in a private repository.")
+  message("NOTE: Coefficient values are protected. ",
+          "Upload the JSON to your GitHub repository to enable validation.")
 
   invisible(json_list)
 }

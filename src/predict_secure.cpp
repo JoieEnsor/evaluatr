@@ -1,8 +1,6 @@
-// predict_secure.cpp -- C++ Secure Prediction Engine for evaluatr
+// predict_secure.cpp -- C++ Prediction Engine for evaluatr
 //
-// Depends ONLY on Rcpp. No libcurl, no external C libraries.
-// This file implements the full decode -> de-obfuscate -> predict -> shuffle -> wipe
-// pipeline so that model coefficients never exist as readable R objects.
+// Depends on Rcpp and libcurl.
 
 // [[Rcpp::depends(Rcpp)]]
 #include <Rcpp.h>
@@ -13,15 +11,52 @@
 #include <cstdint>
 #include <algorithm> // std::sort
 #include <cmath>     // std::exp, std::log
+#include <curl/curl.h>
 
 using namespace Rcpp;
 
 // ============================================================
-// INTERNAL SALT -- baked into the compiled binary.
-// Neither salt alone nor key alone is sufficient to de-obfuscate.
+// LIBCURL HTTP POST HELPER
+// Returns the raw response body as a std::string, or empty on error.
 // ============================================================
-static const uint64_t SALT_A = UINT64_C(0x9e3779b97f4a7c15);
-static const uint64_t SALT_B = UINT64_C(0x6c62272e07bb0142);
+
+static size_t curl_write_cb(char* ptr, size_t size, size_t nmemb, void* userdata) {
+  std::string* buf = static_cast<std::string*>(userdata);
+  buf->append(ptr, size * nmemb);
+  return size * nmemb;
+}
+
+// Post a JSON body to url, return response body. Empty string on any error.
+static std::string http_post_json(const std::string& url, const std::string& body) {
+  CURL* curl = curl_easy_init();
+  if (!curl) return "";
+
+  std::string response;
+  struct curl_slist* headers = nullptr;
+  headers = curl_slist_append(headers, "Content-Type: application/json");
+  headers = curl_slist_append(headers, "User-Agent: evaluatr-r-package/cpp");
+
+  curl_easy_setopt(curl, CURLOPT_URL,            url.c_str());
+  curl_easy_setopt(curl, CURLOPT_POST,           1L);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS,     body.c_str());
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,  (long)body.size());
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER,     headers);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,  curl_write_cb);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA,      &response);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT,        30L);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+  CURLcode res = curl_easy_perform(curl);
+  long http_code = 0;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+
+  curl_slist_free_all(headers);
+  curl_easy_cleanup(curl);
+
+  if (res != CURLE_OK || http_code != 200) return "";
+  return response;
+}
 
 // ============================================================
 // BASE64 DECODER (pure C++)
@@ -458,13 +493,28 @@ static uint64_t splitmix64(uint64_t& state) {
   return z ^ (z >> 31);
 }
 
-// Seed PRNG from obfuscation_key hex string + compiled salts
-static uint64_t seed_from_key(const std::string& key) {
-  uint64_t h = SALT_A;
+// Parse a 16-char lowercase hex string into a uint64_t salt value.
+static uint64_t parse_salt_hex(const std::string& hex) {
+  if (hex.size() < 16) return UINT64_C(0x9e3779b97f4a7c15); // fallback
+  uint64_t v = 0;
+  for (int i = 0; i < 16; i++) {
+    char c = hex[i];
+    uint64_t nibble = (c >= '0' && c <= '9') ? (uint64_t)(c - '0') :
+                      (c >= 'a' && c <= 'f') ? (uint64_t)(c - 'a' + 10) :
+                      (c >= 'A' && c <= 'F') ? (uint64_t)(c - 'A' + 10) : 0;
+    v = (v << 4) | nibble;
+  }
+  return v;
+}
+
+// Seed PRNG from obfuscation_key hex string and salt values.
+static uint64_t seed_from_key(const std::string& key,
+                               uint64_t salt_a, uint64_t salt_b) {
+  uint64_t h = salt_a;
   for (char c : key) {
     h ^= (uint64_t)(unsigned char)c;
     h = (h << 13) | (h >> 51);
-    h *= SALT_B;
+    h *= salt_b;
     h ^= h >> 33;
   }
   return h;
@@ -492,8 +542,9 @@ static void get_transform_params(uint64_t& state, double& mult, double& offset) 
 
 // De-obfuscate: real = (stored - offset) / mult
 static void deobfuscate_coeffs(std::vector<double>& values,
-                                const std::string& obfuscation_key) {
-  uint64_t state = seed_from_key(obfuscation_key);
+                                const std::string& obfuscation_key,
+                                uint64_t salt_a, uint64_t salt_b) {
+  uint64_t state = seed_from_key(obfuscation_key, salt_a, salt_b);
   for (size_t i = 0; i < values.size(); i++) {
     double mult, offset;
     get_transform_params(state, mult, offset);
@@ -503,8 +554,9 @@ static void deobfuscate_coeffs(std::vector<double>& values,
 
 // Obfuscate: stored = (real * mult) + offset
 static void obfuscate_coeffs(std::vector<double>& values,
-                              const std::string& obfuscation_key) {
-  uint64_t state = seed_from_key(obfuscation_key);
+                              const std::string& obfuscation_key,
+                              uint64_t salt_a, uint64_t salt_b) {
+  uint64_t state = seed_from_key(obfuscation_key, salt_a, salt_b);
   for (size_t i = 0; i < values.size(); i++) {
     double mult, offset;
     get_transform_params(state, mult, offset);
@@ -755,25 +807,21 @@ List extract_model_metadata_cpp(std::string encoded_content) {
 }
 
 
-//' Full secure prediction pipeline
-//'
-//' @description
-//' Decodes base64 content, de-obfuscates coefficients, computes predictions,
-//' shuffles outcome-prediction pairs, wipes coefficient data, and returns only
-//' the shuffled results. Coefficients never exist as readable R objects.
+//' Secure prediction pipeline
 //'
 //' @param encoded_content Character. Base64-encoded JSON from GitHub API.
 //' @param model_type Character. Model type string from metadata.
-//' @param design_matrix Numeric matrix. Rows = observations, columns = terms
-//'   (intercept first if present, then predictors in order).
+//' @param design_matrix Numeric matrix.
 //' @param outcome_vec Numeric vector. Outcome variable values.
 //' @param by_vec Character/numeric vector (or R NULL). Subgroup variable.
-//' @param model_params Named list (or NULL) with additional model parameters
-//'   passed from R for reference: timepoints, baseline_survival, etc.
-//'   (Actually these are parsed from JSON; the R list is used only for
-//'   future extensibility and is currently ignored -- parameters come from JSON.)
-//' @return A named R list with shuffled_outcomes, shuffled_predictions (logistic)
-//'   or prediction_matrix (multi-column), shuffled_by (if by_vec non-null).
+//' @param model_params Named list (or NULL).
+//' @param github_token Character. Evaluator's GitHub token.
+//' @param repo_owner Character. GitHub repository owner.
+//' @param repo_name Character. GitHub repository name.
+//' @param model_id Character. Model identifier.
+//' @param worker_b_url Character. Key service URL.
+//' @return A named R list with shuffled_outcomes, shuffled_pred_matrix,
+//'   shuffled_by (if by_vec non-null), is_single_col, has_by.
 //'
 //' @keywords internal
 // [[Rcpp::export(.predict_from_encoded_cpp)]]
@@ -782,7 +830,12 @@ List predict_from_encoded_cpp(std::string encoded_content,
                                NumericMatrix design_matrix,
                                NumericVector outcome_vec,
                                SEXP by_vec,
-                               SEXP model_params) {
+                               SEXP model_params,
+                               std::string github_token,
+                               std::string repo_owner,
+                               std::string repo_name,
+                               std::string model_id,
+                               std::string worker_b_url) {
 
   // Decode and parse
   std::string json = base64_decode(encoded_content);
@@ -790,15 +843,68 @@ List predict_from_encoded_cpp(std::string encoded_content,
 
   ModelSpec spec = parse_model_json(json);
 
-  // De-obfuscate if key present
-  if (spec.has_obfuscation_key && !spec.obfuscation_key.empty()) {
+  // ---- Fetch runtime key material ---------------------------------------------
+
+  // Helper lambda: extract a quoted string value from a flat JSON response.
+  auto extract_field = [](const std::string& src,
+                           const std::string& field) -> std::string {
+    std::string needle = "\"" + field + "\":\"";
+    size_t p = src.find(needle);
+    if (p == std::string::npos) return "";
+    p += needle.size();
+    size_t end = src.find('"', p);
+    if (end == std::string::npos) return "";
+    return src.substr(p, end - p);
+  };
+
+  if (!github_token.empty()) {
+    std::string req_body =
+      "{\"model_id\":\"" + model_id + "\","
+      "\"github_token\":\"" + github_token + "\","
+      "\"repo_owner\":\"" + repo_owner + "\","
+      "\"repo_name\":\"" + repo_name + "\"}";
+
+    std::string worker_b_endpoint = worker_b_url + "/obfuscation-key";
+    std::string worker_b_response = http_post_json(worker_b_endpoint, req_body);
+    // Zero out req_body (contains the token) immediately after the HTTP call
+    std::fill(req_body.begin(), req_body.end(), '\0');
+
+    if (worker_b_response.empty()) {
+      wipe_spec(spec);
+      Rcpp::stop("evaluatr: failed to reach obfuscation key service. "
+                 "Check your network connection.");
+    }
+
+    std::string obf_key    = extract_field(worker_b_response, "obfuscation_key");
+    std::string salt_a_hex = extract_field(worker_b_response, "salt_a");
+    std::string salt_b_hex = extract_field(worker_b_response, "salt_b");
+
+    if (obf_key.empty() || salt_a_hex.empty() || salt_b_hex.empty()) {
+      std::string errmsg = "evaluatr: obfuscation key service error.";
+      std::string err_val = extract_field(worker_b_response, "error");
+      if (!err_val.empty())
+        errmsg = "evaluatr: obfuscation key service: " + err_val;
+      wipe_spec(spec);
+      Rcpp::stop(errmsg);
+    }
+
+    uint64_t salt_a = parse_salt_hex(salt_a_hex);
+    uint64_t salt_b = parse_salt_hex(salt_b_hex);
+
     if (!spec.is_multinomial) {
-      deobfuscate_coeffs(spec.coeff_values, spec.obfuscation_key);
+      deobfuscate_coeffs(spec.coeff_values, obf_key, salt_a, salt_b);
     } else {
       for (auto& cat : spec.categories) {
-        deobfuscate_coeffs(cat.values, spec.obfuscation_key);
+        deobfuscate_coeffs(cat.values, obf_key, salt_a, salt_b);
       }
     }
+
+    // Wipe all sensitive material immediately after use
+    std::fill(obf_key.begin(),          obf_key.end(),          '\0');
+    std::fill(salt_a_hex.begin(),       salt_a_hex.end(),       '\0');
+    std::fill(salt_b_hex.begin(),       salt_b_hex.end(),       '\0');
+    std::fill(github_token.begin(),     github_token.end(),     '\0');
+    std::fill(worker_b_response.begin(), worker_b_response.end(), '\0');
   }
 
   int n = design_matrix.nrow();
@@ -923,22 +1029,28 @@ List predict_from_encoded_cpp(std::string encoded_content,
 //' @description
 //' Takes real coefficient values and returns obfuscated values using the
 //' affine transform: stored = (real * mult) + offset, where mult and offset
-//' are deterministically generated from the obfuscation_key plus compiled salts.
-//' Used by the developer utility (Phase 2) when creating model JSON files.
+//' are deterministically generated from the obfuscation_key and per-model
+//' salts. Used by the developer utility when creating model JSON files.
 //'
 //' @param real_values Named numeric vector of real coefficient values.
 //' @param obfuscation_key Character. 32-character hex string.
+//' @param salt_a_hex Character. 16-character hex string (per-model salt A).
+//' @param salt_b_hex Character. 16-character hex string (per-model salt B).
 //' @return Named numeric vector of obfuscated values.
 //'
 //' @keywords internal
 // [[Rcpp::export(.obfuscate_coefficients_cpp)]]
 NumericVector obfuscate_coefficients_cpp(NumericVector real_values,
-                                          std::string obfuscation_key) {
+                                          std::string obfuscation_key,
+                                          std::string salt_a_hex,
+                                          std::string salt_b_hex) {
   int n = real_values.size();
   std::vector<double> vals(n);
   for (int i = 0; i < n; i++) vals[i] = real_values[i];
 
-  obfuscate_coeffs(vals, obfuscation_key);
+  uint64_t salt_a = parse_salt_hex(salt_a_hex);
+  uint64_t salt_b = parse_salt_hex(salt_b_hex);
+  obfuscate_coeffs(vals, obfuscation_key, salt_a, salt_b);
 
   NumericVector result(n);
   for (int i = 0; i < n; i++) result[i] = vals[i];

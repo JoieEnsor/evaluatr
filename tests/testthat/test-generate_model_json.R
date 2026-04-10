@@ -17,10 +17,10 @@ library(jsonlite)
 # Key service mock
 # ============================================================
 
-# Phase 3a: mock .register_model_with_key_service() so tests do not need a
-# live key service. Used by all generate_model_json() calls in this file.
+# Mock .register_model_with_key_service() so tests do not need a live key
+# service. Signature updated: now includes salt_a and salt_b (Phase 1).
 mock_register_ok_gj <- function(model_id, developer_id, model_name,
-                                 obfuscation_key) {
+                                 obfuscation_key, salt_a, salt_b) {
   list(
     encryption_key = paste0(rep("c", 64), collapse = ""),
     registered_at  = "2026-03-19T12:00:00Z"
@@ -36,15 +36,18 @@ with_mocked_gmj <- function(expr) {
   )
 }
 
-# Helper: like with_mocked_gmj but captures the obfuscation_key that
-# generate_model_json() sends to the key service (Improvement B).
-# Returns a list: $result (generate_model_json return value) and
-# $obfuscation_key (the key that was registered).
+# Helper: like with_mocked_gmj but captures the obfuscation_key and salts that
+# generate_model_json() sends to the key service.
+# Returns a list: $result, $obfuscation_key, $salt_a, $salt_b.
 with_mocked_gmj_capture <- function(expr) {
   captured_obf_key <- NULL
+  captured_salt_a  <- NULL
+  captured_salt_b  <- NULL
   mock_register_capture <- function(model_id, developer_id, model_name,
-                                    obfuscation_key) {
+                                    obfuscation_key, salt_a, salt_b) {
     captured_obf_key <<- obfuscation_key
+    captured_salt_a  <<- salt_a
+    captured_salt_b  <<- salt_b
     list(
       encryption_key = paste0(rep("c", 64), collapse = ""),
       registered_at  = "2026-03-19T12:00:00Z"
@@ -55,7 +58,8 @@ with_mocked_gmj_capture <- function(expr) {
     .register_model_with_key_service = mock_register_capture,
     .package = "evaluatr"
   )
-  list(result = result, obfuscation_key = captured_obf_key)
+  list(result = result, obfuscation_key = captured_obf_key,
+       salt_a = captured_salt_a, salt_b = captured_salt_b)
 }
 
 # ============================================================
@@ -312,14 +316,17 @@ test_that("weibull from survreg: shape parameter extracted and preserved", {
 # Test 6: Round-trip verification
 # ============================================================
 
-test_that("round-trip logistic: predictions from JSON match manual calculation", {
-  # Real coefficients (test model)
+test_that("round-trip logistic: JSON decrypts and produces valid predictions", {
+  # Verifies the full generate -> encrypt -> decrypt -> predict pipeline runs
+  # without error and produces structurally valid output.
+  # Numeric accuracy is not checked here: de-obfuscation requires a live
+  # Worker B call (github_token not available in unit tests). Numeric
+  # round-trip accuracy is covered in test-predict_secure.R via unobfuscated JSON.
   real_coeffs <- c("(Intercept)" = -1.25, age = 0.02,
                    biomarker_score = 0.8, treatment_group = -0.6)
 
   tmp <- tempdir()
-  # Capture obfuscation_key sent to key service (Improvement B)
-  captured <- with_mocked_gmj_capture(generate_model_json(
+  with_mocked_gmj_capture(generate_model_json(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "roundtrip_logistic",
@@ -329,62 +336,44 @@ test_that("round-trip logistic: predictions from JSON match manual calculation",
     variables    = c("age", "biomarker_score", "treatment_group"),
     output_dir   = tmp
   ))
-  obf_key <- captured$obfuscation_key
 
-  # Build validation dataset
   set.seed(99)
-  n       <- 50
-  val_df  <- data.frame(
+  n      <- 50
+  val_df <- data.frame(
     age             = rnorm(n, 60, 10),
     biomarker_score = rnorm(n, 0, 1),
     treatment_group = rbinom(n, 1, 0.5),
     outcome         = rbinom(n, 1, 0.4)
   )
 
-  # Base64-encode the JSON for .predict_secure()
-  json_str <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
-  encoded  <- base64_enc(paste(json_str, collapse = "\n"))
-
-  # Run secure prediction — pass both keys (Improvement B)
+  json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
+  encoded      <- base64_enc(paste(json_str, collapse = "\n"))
   mock_enc_key <- paste0(rep("c", 64), collapse = "")
-  pred_result  <- evaluatr:::.predict_secure(
-    encoded_content = encoded,
-    validation_data = val_df,
-    outcome         = "outcome",
-    model_id        = "roundtrip_logistic",
-    decryption_key  = mock_enc_key,
-    obfuscation_key = obf_key
-  )
 
-  cpp_preds   <- pred_result$shuffled_predictions
-
-  # Manual predictions (un-shuffled, then sort by magnitude for comparison)
-  manual_preds <- manual_logistic_pred(val_df, real_coeffs)
-
-  # The shuffled predictions must be a permutation of the manual predictions
+  expect_no_error({
+    pred_result <- evaluatr:::.predict_secure(
+      encoded_content = encoded,
+      validation_data = val_df,
+      outcome         = "outcome",
+      model_id        = "roundtrip_logistic",
+      decryption_key  = mock_enc_key
+    )
+  })
+  cpp_preds <- pred_result$shuffled_predictions
   expect_equal(length(cpp_preds), n)
-  expect_equal(sort(round(cpp_preds, 6)), sort(round(manual_preds, 6)),
-               tolerance = 1e-4,
-               label = "round-trip logistic predictions match manual calculation")
-
-  # Correlation should be very high (>0.9999) when sorted
-  expect_gt(cor(sort(cpp_preds), sort(manual_preds)), 0.9999)
+  expect_true(all(cpp_preds >= 0 & cpp_preds <= 1))
 })
 
 
-test_that("round-trip multinomial: predictions from JSON match softmax calculation", {
+test_that("round-trip multinomial: JSON decrypts and produces valid predictions", {
   skip_if_not_installed("nnet")
-  # Real multinomial coefficients (test model)
-  # cat_B: (Intercept) = -0.5, x1 = 0.3, x2 = 0.2
-  # cat_C: (Intercept) =  0.5, x1 = 0.1, x2 = -0.4
-  # reference = cat_A
   real_coeffs <- list(
     cat_B = c("(Intercept)" = -0.5, x1 = 0.3,  x2 =  0.2),
     cat_C = c("(Intercept)" =  0.5, x1 = 0.1,  x2 = -0.4)
   )
 
   tmp <- tempdir()
-  captured <- with_mocked_gmj_capture(generate_model_json(
+  with_mocked_gmj_capture(generate_model_json(
     coefficients       = real_coeffs,
     model_type         = "multinomial",
     model_id           = "roundtrip_multinom",
@@ -395,7 +384,6 @@ test_that("round-trip multinomial: predictions from JSON match softmax calculati
     reference_category = "cat_A",
     output_dir         = tmp
   ))
-  obf_key <- captured$obfuscation_key
 
   set.seed(77)
   n      <- 50
@@ -408,47 +396,27 @@ test_that("round-trip multinomial: predictions from JSON match softmax calculati
   json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
   encoded      <- base64_enc(paste(json_str, collapse = "\n"))
   mock_enc_key <- paste0(rep("c", 64), collapse = "")
-  pred_result  <- evaluatr:::.predict_secure(
-    encoded_content = encoded,
-    validation_data = val_df,
-    outcome         = "outcome",
-    model_id        = "roundtrip_multinom",
-    decryption_key  = mock_enc_key,
-    obfuscation_key = obf_key
-  )
 
+  expect_no_error({
+    pred_result <- evaluatr:::.predict_secure(
+      encoded_content = encoded,
+      validation_data = val_df,
+      outcome         = "outcome",
+      model_id        = "roundtrip_multinom",
+      decryption_key  = mock_enc_key
+    )
+  })
   cpp_preds <- pred_result$prediction_matrix
   expect_equal(nrow(cpp_preds), n)
   expect_equal(ncol(cpp_preds), 3L)  # reference + 2 categories
-
-  # Manual softmax probabilities
-  lp_B <- real_coeffs$cat_B["(Intercept)"] +
-          real_coeffs$cat_B["x1"] * val_df$x1 +
-          real_coeffs$cat_B["x2"] * val_df$x2
-  lp_C <- real_coeffs$cat_C["(Intercept)"] +
-          real_coeffs$cat_C["x1"] * val_df$x1 +
-          real_coeffs$cat_C["x2"] * val_df$x2
-  denom       <- 1 + exp(lp_B) + exp(lp_C)
-  manual_refA <- 1 / denom
-  manual_B    <- exp(lp_B) / denom
-  manual_C    <- exp(lp_C) / denom
-
-  # Shuffled: sort and compare
-  expect_equal(sort(round(cpp_preds[, "reference"], 6)),
-               sort(round(manual_refA, 6)), tolerance = 1e-4)
-  expect_equal(sort(round(cpp_preds[, "cat_B"], 6)),
-               sort(round(manual_B, 6)), tolerance = 1e-4)
-  expect_equal(sort(round(cpp_preds[, "cat_C"], 6)),
-               sort(round(manual_C, 6)), tolerance = 1e-4)
+  # Row probabilities must sum to 1
+  row_sums <- rowSums(cpp_preds)
+  expect_true(all(abs(row_sums - 1) < 1e-6))
 })
 
 
-test_that("round-trip Cox: predictions from JSON match manual calculation", {
+test_that("round-trip Cox: JSON decrypts and produces valid predictions", {
   skip_if_not_installed("survival")
-  # Cox has no intercept conceptually, but the design matrix always has an
-  # intercept column prepended by .build_design_matrix(). The C++ engine
-  # aligns by position, so an explicit (Intercept)=0.0 entry must be first
-  # in the coefficient list — exactly as the Phase 1 test model uses.
   real_coeffs <- c("(Intercept)" = 0.0, age = 0.05, bmi = 0.03)
   mp <- list(
     timepoints        = c(1, 2, 5),
@@ -456,7 +424,7 @@ test_that("round-trip Cox: predictions from JSON match manual calculation", {
   )
 
   tmp <- tempdir()
-  captured <- with_mocked_gmj_capture(generate_model_json(
+  with_mocked_gmj_capture(generate_model_json(
     coefficients     = real_coeffs,
     model_type       = "cox",
     model_id         = "roundtrip_cox",
@@ -467,7 +435,6 @@ test_that("round-trip Cox: predictions from JSON match manual calculation", {
     model_parameters = mp,
     output_dir       = tmp
   ))
-  obf_key <- captured$obfuscation_key
 
   set.seed(55)
   n      <- 40
@@ -480,44 +447,35 @@ test_that("round-trip Cox: predictions from JSON match manual calculation", {
   json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
   encoded      <- base64_enc(paste(json_str, collapse = "\n"))
   mock_enc_key <- paste0(rep("c", 64), collapse = "")
-  pred_result  <- evaluatr:::.predict_secure(
-    encoded_content = encoded,
-    validation_data = val_df,
-    outcome         = "outcome",
-    model_id        = "roundtrip_cox",
-    decryption_key  = mock_enc_key,
-    obfuscation_key = obf_key
-  )
 
+  expect_no_error({
+    pred_result <- evaluatr:::.predict_secure(
+      encoded_content = encoded,
+      validation_data = val_df,
+      outcome         = "outcome",
+      model_id        = "roundtrip_cox",
+      decryption_key  = mock_enc_key
+    )
+  })
   cpp_preds <- pred_result$prediction_matrix
   expect_equal(nrow(cpp_preds), n)
   expect_equal(ncol(cpp_preds), 3L)  # three timepoints
-
-  # Manual Cox predictions: S(t) = S0(t)^exp(LP)
-  # LP = 0*(intercept) + age_coeff*age + bmi_coeff*bmi
-  lp          <- real_coeffs["age"] * val_df$age + real_coeffs["bmi"] * val_df$bmi
-  manual_t1   <- mp$baseline_survival[1]^exp(lp)
-  manual_t2   <- mp$baseline_survival[2]^exp(lp)
-  manual_t5   <- mp$baseline_survival[3]^exp(lp)
-
-  expect_equal(sort(round(cpp_preds[, 1], 6)), sort(round(manual_t1, 6)), tolerance = 1e-4)
-  expect_equal(sort(round(cpp_preds[, 2], 6)), sort(round(manual_t2, 6)), tolerance = 1e-4)
-  expect_equal(sort(round(cpp_preds[, 3], 6)), sort(round(manual_t5, 6)), tolerance = 1e-4)
+  # Survival probabilities must be in [0, 1]
+  expect_true(all(cpp_preds >= 0 & cpp_preds <= 1))
 })
 
 
-test_that("round-trip Weibull AFT: predictions from JSON match manual calculation", {
+test_that("round-trip Weibull AFT: JSON decrypts and produces valid predictions", {
   skip_if_not_installed("survival")
   real_coeffs <- c("(Intercept)" = 3.0, age = -0.02)
-  shape_val   <- 1.5
   mp <- list(
     timepoints       = c(1, 3, 5),
-    shape            = shape_val,
+    shape            = 1.5,
     parameterisation = "aft"
   )
 
   tmp <- tempdir()
-  captured <- with_mocked_gmj_capture(generate_model_json(
+  with_mocked_gmj_capture(generate_model_json(
     coefficients     = real_coeffs,
     model_type       = "weibull",
     model_id         = "roundtrip_weibull",
@@ -528,7 +486,6 @@ test_that("round-trip Weibull AFT: predictions from JSON match manual calculatio
     model_parameters = mp,
     output_dir       = tmp
   ))
-  obf_key <- captured$obfuscation_key
 
   set.seed(33)
   n      <- 40
@@ -540,29 +497,21 @@ test_that("round-trip Weibull AFT: predictions from JSON match manual calculatio
   json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
   encoded      <- base64_enc(paste(json_str, collapse = "\n"))
   mock_enc_key <- paste0(rep("c", 64), collapse = "")
-  pred_result  <- evaluatr:::.predict_secure(
-    encoded_content = encoded,
-    validation_data = val_df,
-    outcome         = "outcome",
-    model_id        = "roundtrip_weibull",
-    decryption_key  = mock_enc_key,
-    obfuscation_key = obf_key
-  )
 
+  expect_no_error({
+    pred_result <- evaluatr:::.predict_secure(
+      encoded_content = encoded,
+      validation_data = val_df,
+      outcome         = "outcome",
+      model_id        = "roundtrip_weibull",
+      decryption_key  = mock_enc_key
+    )
+  })
   cpp_preds <- pred_result$prediction_matrix
   expect_equal(nrow(cpp_preds), n)
-
-  # Manual Weibull AFT: S(t) = exp(-(t/scale)^shape), scale = exp(LP)
-  lp    <- real_coeffs["(Intercept)"] + real_coeffs["age"] * val_df$age
-  scale <- exp(lp)
-  for (ti in seq_along(mp$timepoints)) {
-    tv           <- mp$timepoints[ti]
-    manual_surv  <- exp(-(tv / scale)^shape_val)
-    expect_equal(sort(round(cpp_preds[, ti], 5)),
-                 sort(round(manual_surv, 5)),
-                 tolerance = 1e-4,
-                 label = paste("Weibull AFT t =", tv))
-  }
+  expect_equal(ncol(cpp_preds), length(mp$timepoints))
+  # Survival probabilities must be in [0, 1]
+  expect_true(all(cpp_preds >= 0 & cpp_preds <= 1))
 })
 
 
@@ -850,7 +799,7 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
   preprocessing <- "validation_data$sexfemale <- ifelse(validation_data$sex == 'female', 1, 0)"
 
   tmp <- tempdir()
-  captured <- with_mocked_gmj_capture(generate_model_json(
+  with_mocked_gmj_capture(generate_model_json(
     coefficients  = real_coeffs,
     model_type    = "logistic",
     model_id      = "preproc_roundtrip",
@@ -860,7 +809,6 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
     preprocessing = preprocessing,
     output_dir    = tmp
   ))
-  obf_key <- captured$obfuscation_key
 
   set.seed(44)
   n      <- 40
@@ -882,21 +830,13 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
       validation_data = val_df,
       outcome         = "outcome",
       model_id        = "preproc_roundtrip",
-      decryption_key  = mock_key,
-      obfuscation_key = obf_key
+      decryption_key  = mock_key
     )
   })
 
-  cpp_preds    <- pred_result$shuffled_predictions
+  cpp_preds <- pred_result$shuffled_predictions
   expect_equal(length(cpp_preds), n)
   expect_true(all(cpp_preds >= 0 & cpp_preds <= 1))
-
-  # Manual predictions with preprocessing applied
-  val_df$sexfemale <- ifelse(val_df$sex == "female", 1, 0)
-  manual_preds     <- manual_logistic_pred(val_df, real_coeffs)
-
-  expect_equal(sort(round(cpp_preds, 5)), sort(round(manual_preds, 5)),
-               tolerance = 1e-4)
 })
 
 
@@ -952,16 +892,20 @@ test_that("Phase 3b: .validate_json_structure() accepts encrypted format", {
 
 
 test_that("Phase 3b: .decrypt_coefficients_in_json() round-trips correctly", {
-  # Improvement B: obfuscation_key NOT in JSON; passed as argument
-  real_coeffs   <- c("(Intercept)" = -1.25, "age" = 0.02, "score" = 0.8)
-  obf_key       <- evaluatr:::.generate_obfuscation_key()
-  obf_coeffs    <- as.list(evaluatr:::.obfuscate_coefficients(real_coeffs, obf_key))
-  coeff_json    <- jsonlite::toJSON(obf_coeffs, auto_unbox = TRUE)
+  # v1.1 format: obfuscation_key NOT in JSON (held by Worker B, fetched by C++)
+  real_coeffs <- c("(Intercept)" = -1.25, "age" = 0.02, "score" = 0.8)
+  obf_key     <- evaluatr:::.generate_obfuscation_key()
+  salt_a      <- evaluatr:::.generate_salt64()
+  salt_b      <- evaluatr:::.generate_salt64()
+  obf_coeffs  <- as.list(evaluatr:::.obfuscate_coefficients(
+    real_coeffs, obf_key, salt_a, salt_b
+  ))
+  coeff_json  <- jsonlite::toJSON(obf_coeffs, auto_unbox = TRUE)
 
-  enc_key_hex   <- paste0(rep("c", 64), collapse = "")
-  key_raw       <- evaluatr:::.hex_to_raw(enc_key_hex)
-  iv            <- openssl::rand_bytes(12)
-  ciphertext    <- openssl::aes_gcm_encrypt(charToRaw(coeff_json), key_raw, iv)
+  enc_key_hex <- paste0(rep("c", 64), collapse = "")
+  key_raw     <- evaluatr:::.hex_to_raw(enc_key_hex)
+  iv          <- openssl::rand_bytes(12)
+  ciphertext  <- openssl::aes_gcm_encrypt(charToRaw(coeff_json), key_raw, iv)
 
   json_list <- list(
     model_type             = "logistic",
@@ -984,12 +928,12 @@ test_that("Phase 3b: .decrypt_coefficients_in_json() round-trips correctly", {
     jsonlite::toJSON(json_list, auto_unbox = TRUE, null = "null", digits = 10)
   ))
 
-  # Pass obfuscation_key as argument (from key service)
+  # decrypt_coefficients_in_json now takes only encoded + decryption_key;
+  # obfuscation_key is NOT injected (C++ fetches it from Worker B)
   decrypted_encoded <- evaluatr:::.decrypt_coefficients_in_json(
-    encoded, enc_key_hex, obf_key
+    encoded, enc_key_hex
   )
 
-  # Decrypted result should parse with coefficients, obfuscation_key injected
   decrypted_json <- rawToChar(openssl::base64_decode(decrypted_encoded))
   parsed         <- jsonlite::fromJSON(decrypted_json, simplifyVector = FALSE)
 
@@ -997,7 +941,8 @@ test_that("Phase 3b: .decrypt_coefficients_in_json() round-trips correctly", {
   expect_false("encrypted_coefficients" %in% names(parsed))
   expect_false("encryption_iv" %in% names(parsed))
   expect_null(parsed$metadata$encryption)
-  expect_equal(parsed$obfuscation_key, obf_key)
+  # obfuscation_key is NOT injected — held by Worker B
+  expect_null(parsed$obfuscation_key)
 
   # Coefficient names preserved
   expect_true("(Intercept)" %in% names(parsed$coefficients))
@@ -1007,10 +952,14 @@ test_that("Phase 3b: .decrypt_coefficients_in_json() round-trips correctly", {
 
 
 test_that("Phase 3b: .decrypt_coefficients_in_json() passes through unencrypted JSON", {
-  # Unencrypted v1 JSON should be returned unchanged
+  # Unencrypted JSON should be returned unchanged
   real_coeffs <- c("(Intercept)" = -1.25, "age" = 0.02)
   obf_key     <- evaluatr:::.generate_obfuscation_key()
-  obf_coeffs  <- as.list(evaluatr:::.obfuscate_coefficients(real_coeffs, obf_key))
+  salt_a      <- evaluatr:::.generate_salt64()
+  salt_b      <- evaluatr:::.generate_salt64()
+  obf_coeffs  <- as.list(evaluatr:::.obfuscate_coefficients(
+    real_coeffs, obf_key, salt_a, salt_b
+  ))
 
   json_list <- list(
     model_type      = "logistic",
@@ -1043,18 +992,21 @@ test_that("Phase 3b: .decrypt_coefficients_in_json() passes through unencrypted 
 
 
 test_that("Phase 3b: wrong decryption key produces an error", {
-  real_coeffs   <- c("(Intercept)" = -1.25, "age" = 0.02)
-  obf_key       <- evaluatr:::.generate_obfuscation_key()
-  obf_coeffs    <- as.list(evaluatr:::.obfuscate_coefficients(real_coeffs, obf_key))
-  coeff_json    <- jsonlite::toJSON(obf_coeffs, auto_unbox = TRUE)
+  real_coeffs <- c("(Intercept)" = -1.25, "age" = 0.02)
+  obf_key     <- evaluatr:::.generate_obfuscation_key()
+  salt_a      <- evaluatr:::.generate_salt64()
+  salt_b      <- evaluatr:::.generate_salt64()
+  obf_coeffs  <- as.list(evaluatr:::.obfuscate_coefficients(
+    real_coeffs, obf_key, salt_a, salt_b
+  ))
+  coeff_json  <- jsonlite::toJSON(obf_coeffs, auto_unbox = TRUE)
 
-  correct_key   <- paste0(rep("c", 64), collapse = "")
-  wrong_key     <- paste0(rep("d", 64), collapse = "")
-  key_raw       <- evaluatr:::.hex_to_raw(correct_key)
-  iv            <- openssl::rand_bytes(12)
-  ciphertext    <- openssl::aes_gcm_encrypt(charToRaw(coeff_json), key_raw, iv)
+  correct_key <- paste0(rep("c", 64), collapse = "")
+  wrong_key   <- paste0(rep("d", 64), collapse = "")
+  key_raw     <- evaluatr:::.hex_to_raw(correct_key)
+  iv          <- openssl::rand_bytes(12)
+  ciphertext  <- openssl::aes_gcm_encrypt(charToRaw(coeff_json), key_raw, iv)
 
-  # Improvement B: obfuscation_key not in JSON
   json_list <- list(
     model_type             = "logistic",
     encrypted_coefficients = openssl::base64_encode(ciphertext),
@@ -1073,7 +1025,7 @@ test_that("Phase 3b: wrong decryption key produces an error", {
   ))
 
   expect_error(
-    evaluatr:::.decrypt_coefficients_in_json(encoded, wrong_key, obf_key),
+    evaluatr:::.decrypt_coefficients_in_json(encoded, wrong_key),
     label = "wrong key should cause decryption error"
   )
 })

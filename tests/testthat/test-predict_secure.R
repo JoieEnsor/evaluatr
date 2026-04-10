@@ -8,12 +8,15 @@ library(jsonlite)
 
 # ---- Helpers: build encoded JSON content ------------------------------------
 
-make_logistic_json <- function(obfuscated = FALSE, key = NULL) {
+make_logistic_json <- function(obfuscated = FALSE, key = NULL,
+                               salt_a = NULL, salt_b = NULL) {
   # True coefficients: (Intercept) = -1.25, age = 0.02, biomarker_score = 0.8
   real_coeffs <- c("(Intercept)" = -1.25, "age" = 0.02, "biomarker_score" = 0.8)
 
-  if (obfuscated && !is.null(key)) {
-    stored_coeffs <- evaluatr:::.obfuscate_coefficients(real_coeffs, key)
+  if (obfuscated && !is.null(key) && !is.null(salt_a) && !is.null(salt_b)) {
+    stored_coeffs <- evaluatr:::.obfuscate_coefficients(
+      real_coeffs, key, salt_a, salt_b
+    )
   } else {
     stored_coeffs <- real_coeffs
     key <- NULL
@@ -32,21 +35,23 @@ make_logistic_json <- function(obfuscated = FALSE, key = NULL) {
       description  = "Test logistic model"
     )
   )
-  if (obfuscated && !is.null(key)) obj$obfuscation_key <- key
 
-  raw <- chartr("\n", "\n", toJSON(obj, auto_unbox = TRUE, null = "null"))
-  base64_enc(chartr("", "", raw))
+  raw <- toJSON(obj, auto_unbox = TRUE, null = "null")
+  base64_enc(raw)
 }
 
 make_logistic_json_with_by <- make_logistic_json  # same structure
 
-make_cox_json <- function(obfuscated = FALSE, key = NULL) {
+make_cox_json <- function(obfuscated = FALSE, key = NULL,
+                          salt_a = NULL, salt_b = NULL) {
   # True coefficients: (Intercept) = 0, age = 0.05, bmi = 0.03
   # Baseline survival at t=1, t=2, t=5
   real_coeffs <- c("(Intercept)" = 0.0, "age" = 0.05, "bmi" = 0.03)
 
-  if (obfuscated && !is.null(key)) {
-    stored_coeffs <- evaluatr:::.obfuscate_coefficients(real_coeffs, key)
+  if (obfuscated && !is.null(key) && !is.null(salt_a) && !is.null(salt_b)) {
+    stored_coeffs <- evaluatr:::.obfuscate_coefficients(
+      real_coeffs, key, salt_a, salt_b
+    )
   } else {
     stored_coeffs <- real_coeffs
     key <- NULL
@@ -68,17 +73,19 @@ make_cox_json <- function(obfuscated = FALSE, key = NULL) {
       description  = "Test Cox model"
     )
   )
-  if (obfuscated && !is.null(key)) obj$obfuscation_key <- key
 
   base64_enc(toJSON(obj, auto_unbox = TRUE, null = "null"))
 }
 
-make_weibull_json <- function(obfuscated = FALSE, key = NULL) {
+make_weibull_json <- function(obfuscated = FALSE, key = NULL,
+                              salt_a = NULL, salt_b = NULL) {
   # AFT Weibull: (Intercept) = 3.0, age = -0.02
   real_coeffs <- c("(Intercept)" = 3.0, "age" = -0.02)
 
-  if (obfuscated && !is.null(key)) {
-    stored_coeffs <- evaluatr:::.obfuscate_coefficients(real_coeffs, key)
+  if (obfuscated && !is.null(key) && !is.null(salt_a) && !is.null(salt_b)) {
+    stored_coeffs <- evaluatr:::.obfuscate_coefficients(
+      real_coeffs, key, salt_a, salt_b
+    )
   } else {
     stored_coeffs <- real_coeffs
     key <- NULL
@@ -101,25 +108,24 @@ make_weibull_json <- function(obfuscated = FALSE, key = NULL) {
       description  = "Test Weibull AFT"
     )
   )
-  if (obfuscated && !is.null(key)) obj$obfuscation_key <- key
 
   base64_enc(toJSON(obj, auto_unbox = TRUE, null = "null"))
 }
 
-make_multinomial_json <- function(obfuscated = FALSE, key = NULL) {
+make_multinomial_json <- function(obfuscated = FALSE, key = NULL,
+                                  salt_a = NULL, salt_b = NULL) {
   # 2 non-reference categories: cat_B, cat_C (reference = cat_A)
   # cat_B: (Intercept) = -0.5, x1 = 0.3, x2 = 0.2
   # cat_C: (Intercept) =  0.5, x1 = 0.1, x2 = -0.4
   real_B <- c("(Intercept)" = -0.5, "x1" = 0.3, "x2" = 0.2)
   real_C <- c("(Intercept)" =  0.5, "x1" = 0.1, "x2" = -0.4)
 
-  if (obfuscated && !is.null(key)) {
-    stored_B <- evaluatr:::.obfuscate_coefficients(real_B, key)
-    stored_C <- evaluatr:::.obfuscate_coefficients(real_C, key)
+  if (obfuscated && !is.null(key) && !is.null(salt_a) && !is.null(salt_b)) {
+    stored_B <- evaluatr:::.obfuscate_coefficients(real_B, key, salt_a, salt_b)
+    stored_C <- evaluatr:::.obfuscate_coefficients(real_C, key, salt_a, salt_b)
   } else {
     stored_B <- real_B
     stored_C <- real_C
-    key <- NULL
   }
 
   obj <- list(
@@ -131,14 +137,13 @@ make_multinomial_json <- function(obfuscated = FALSE, key = NULL) {
     preprocessing = NULL,
     model_parameters = NULL,
     metadata = list(
-      model_name      = "Test Multinomial",
-      version         = "1.0",
-      outcome_type    = "multinomial",
-      variables       = c("x1", "x2"),
-      description     = "Test multinomial model"
+      model_name   = "Test Multinomial",
+      version      = "1.0",
+      outcome_type = "multinomial",
+      variables    = c("x1", "x2"),
+      description  = "Test multinomial model"
     )
   )
-  if (obfuscated && !is.null(key)) obj$obfuscation_key <- key
 
   base64_enc(toJSON(obj, auto_unbox = TRUE, null = "null"))
 }
@@ -219,32 +224,42 @@ make_multinomial_data <- function(n = 120, seed = 3333) {
 
 
 # =============================================================================
-# 1. Obfuscation round-trip
+# 1. Obfuscation (R-side)
 # =============================================================================
 
-test_that("obfuscation round-trip: obfuscate then de-obfuscate recovers correct values", {
-  real  <- c("(Intercept)" = -1.25, "age" = 0.02, "biomarker_score" = 0.8)
-  key   <- evaluatr:::.generate_obfuscation_key()
+test_that("obfuscation: stored values differ from real values", {
+  real   <- c("(Intercept)" = -1.25, "age" = 0.02, "biomarker_score" = 0.8)
+  key    <- evaluatr:::.generate_obfuscation_key()
+  salt_a <- evaluatr:::.generate_salt64()
+  salt_b <- evaluatr:::.generate_salt64()
 
-  stored  <- evaluatr:::.obfuscate_coefficients(real, key)
-  # stored should differ from real
+  stored <- evaluatr:::.obfuscate_coefficients(real, key, salt_a, salt_b)
   expect_false(all(stored == real))
-
-  # Verify via round-trip: encode as JSON, decode via C++
-  enc     <- make_logistic_json(obfuscated = TRUE, key = key)
-
-  # Use the metadata extractor to confirm key is present
-  meta    <- evaluatr:::.extract_model_metadata_cpp(enc)
-  expect_true(meta$has_obfuscation_key)
+  expect_equal(length(stored), length(real))
+  expect_equal(names(stored), names(real))
 })
 
 test_that("obfuscation: different keys produce different stored values", {
-  real <- c("(Intercept)" = -1.25, "age" = 0.02)
-  k1   <- evaluatr:::.generate_obfuscation_key()
-  k2   <- evaluatr:::.generate_obfuscation_key()
+  real   <- c("(Intercept)" = -1.25, "age" = 0.02)
+  salt_a <- evaluatr:::.generate_salt64()
+  salt_b <- evaluatr:::.generate_salt64()
+  k1     <- evaluatr:::.generate_obfuscation_key()
+  k2     <- evaluatr:::.generate_obfuscation_key()
   expect_false(k1 == k2)
-  s1   <- evaluatr:::.obfuscate_coefficients(real, k1)
-  s2   <- evaluatr:::.obfuscate_coefficients(real, k2)
+  s1 <- evaluatr:::.obfuscate_coefficients(real, k1, salt_a, salt_b)
+  s2 <- evaluatr:::.obfuscate_coefficients(real, k2, salt_a, salt_b)
+  expect_false(all(s1 == s2))
+})
+
+test_that("obfuscation: different salts produce different stored values", {
+  real   <- c("(Intercept)" = -1.25, "age" = 0.02)
+  key    <- evaluatr:::.generate_obfuscation_key()
+  salt_a1 <- evaluatr:::.generate_salt64()
+  salt_b1 <- evaluatr:::.generate_salt64()
+  salt_a2 <- evaluatr:::.generate_salt64()
+  salt_b2 <- evaluatr:::.generate_salt64()
+  s1 <- evaluatr:::.obfuscate_coefficients(real, key, salt_a1, salt_b1)
+  s2 <- evaluatr:::.obfuscate_coefficients(real, key, salt_a2, salt_b2)
   expect_false(all(s1 == s2))
 })
 
@@ -285,13 +300,10 @@ test_that("metadata extractor does NOT return coefficient values", {
   expect_false( 0.8  %in% all_nums)
 })
 
-test_that("metadata extractor marks has_obfuscation_key correctly", {
-  key  <- evaluatr:::.generate_obfuscation_key()
-  enc_obf  <- make_logistic_json(obfuscated = TRUE,  key = key)
-  enc_plain <- make_logistic_json(obfuscated = FALSE)
-
-  expect_true(evaluatr:::.extract_model_metadata_cpp(enc_obf)$has_obfuscation_key)
-  expect_false(evaluatr:::.extract_model_metadata_cpp(enc_plain)$has_obfuscation_key)
+test_that("metadata extractor marks has_obfuscation_key as FALSE for v1.1 JSON", {
+  # v1.1 format: obfuscation key is held by Worker B, never in the JSON
+  enc <- make_logistic_json(obfuscated = FALSE)
+  expect_false(evaluatr:::.extract_model_metadata_cpp(enc)$has_obfuscation_key)
 })
 
 test_that("metadata extractor handles multinomial model", {
@@ -337,26 +349,20 @@ test_that("non-obfuscated logistic returns evaluatr_result class", {
 
 
 # =============================================================================
-# 4. Logistic regression (obfuscated)
+# 4. Logistic regression (additional coverage)
 # =============================================================================
 
-test_that("obfuscated logistic predictions closely match manual R calculation", {
-  df  <- make_binary_data()
-  key <- evaluatr:::.generate_obfuscation_key()
-  enc <- make_logistic_json(obfuscated = TRUE, key = key)
+test_that("logistic model_info contains expected metadata fields", {
+  df     <- make_binary_data()
+  enc    <- make_logistic_json(obfuscated = FALSE)
+  result <- evaluatr:::.predict_secure(enc, df, "outcome", model_id = "meta_test")
 
-  result <- evaluatr:::.predict_secure(enc, df, "outcome", model_id = "test")
-
-  lp_expected <- -1.25 + 0.02 * df$age + 0.8 * df$biomarker_score
-  p_expected  <- 1 / (1 + exp(-lp_expected))
-
-  # Obfuscated values pass through JSON serialisation (finite digits), causing
-  # small rounding errors after de-obfuscation. We verify rank correlation is
-  # near-perfect and max absolute difference is < 0.01.
-  p_sorted    <- sort(result$shuffled_predictions)
-  p_exp_sorted <- sort(p_expected)
-  expect_true(cor(p_sorted, p_exp_sorted) > 0.9999)
-  expect_true(max(abs(p_sorted - p_exp_sorted)) < 0.01)
+  info <- result$model_info
+  expect_equal(info$model_id,   "meta_test")
+  expect_equal(info$model_name, "Test Logistic")
+  expect_equal(info$version,    "1.0")
+  expect_setequal(info$required_variables, c("age", "biomarker_score"))
+  expect_equal(info$n_predictions, nrow(df))
 })
 
 test_that("predictions are in [0, 1] for logistic model", {
@@ -416,13 +422,12 @@ test_that("logistic with 'by': outcome values preserved after shuffling", {
 
 
 # =============================================================================
-# 6. Cox PH (obfuscated)
+# 6. Cox PH
 # =============================================================================
 
-test_that("Cox PH (obfuscated) predictions are survival probabilities in [0, 1]", {
+test_that("Cox PH predictions are survival probabilities in [0, 1]", {
   df  <- make_survival_data()
-  key <- evaluatr:::.generate_obfuscation_key()
-  enc <- make_cox_json(obfuscated = TRUE, key = key)
+  enc <- make_cox_json(obfuscated = FALSE)
 
   result <- evaluatr:::.predict_secure(enc, df, "outcome", model_id = "test_cox")
 
@@ -455,13 +460,12 @@ test_that("Cox PH predictions match manual calculation (non-obfuscated)", {
 
 
 # =============================================================================
-# 7. Weibull AFT (obfuscated)
+# 7. Weibull AFT
 # =============================================================================
 
-test_that("Weibull AFT (obfuscated) predictions are survival probs in [0, 1]", {
+test_that("Weibull AFT predictions are survival probs in [0, 1]", {
   df  <- make_weibull_data()
-  key <- evaluatr:::.generate_obfuscation_key()
-  enc <- make_weibull_json(obfuscated = TRUE, key = key)
+  enc <- make_weibull_json(obfuscated = FALSE)
 
   result <- evaluatr:::.predict_secure(enc, df, "outcome", model_id = "test_weibull")
 
@@ -495,19 +499,15 @@ test_that("Weibull AFT predictions match manual calculation (non-obfuscated)", {
 # 8. Multinomial (obfuscated)
 # =============================================================================
 
-test_that("multinomial (obfuscated) predictions match manual softmax", {
+test_that("multinomial predictions are valid probabilities (row sums = 1)", {
   df  <- make_multinomial_data()
-  key <- evaluatr:::.generate_obfuscation_key()
-  enc <- make_multinomial_json(obfuscated = TRUE, key = key)
+  enc <- make_multinomial_json(obfuscated = FALSE)
 
   result <- evaluatr:::.predict_secure(enc, df, "outcome", model_id = "test_multi")
 
   pm <- result$prediction_matrix
   expect_equal(ncol(pm), 3) # reference + cat_B + cat_C
-
-  # Row sums should be 1
-  row_sums <- rowSums(pm)
-  expect_equal(row_sums, rep(1, nrow(pm)), tolerance = 1e-8)
+  expect_equal(rowSums(pm), rep(1, nrow(pm)), tolerance = 1e-8)
 })
 
 test_that("multinomial predictions match manual softmax (non-obfuscated)", {
@@ -556,17 +556,24 @@ test_that("multinomial does NOT have shuffled_predictions field (binary-only)", 
 
 test_that("predict_from_encoded_cpp result contains no coefficient values", {
   df  <- make_binary_data()
-  key <- evaluatr:::.generate_obfuscation_key()
-  enc <- make_logistic_json(obfuscated = TRUE, key = key)
+  enc <- make_logistic_json(obfuscated = FALSE)
 
-  X   <- evaluatr:::.build_design_matrix(df, c("age", "biomarker_score"), has_intercept = TRUE)
+  X   <- evaluatr:::.build_design_matrix(
+    df, c("age", "biomarker_score"), has_intercept = TRUE
+  )
+  # github_token = "" skips the Worker B call (unit test path)
   res <- evaluatr:::.predict_from_encoded_cpp(
     encoded_content = enc,
     model_type      = "logistic",
     design_matrix   = X,
     outcome_vec     = df$outcome,
     by_vec          = NULL,
-    model_params    = NULL
+    model_params    = NULL,
+    github_token    = "",
+    repo_owner      = "",
+    repo_name       = "",
+    model_id        = "test",
+    worker_b_url    = ""
   )
 
   # Result should only contain shuffled data — no coeff names
@@ -765,11 +772,15 @@ test_that(".generate_obfuscation_key produces unique values", {
 
 # Helper: build an encrypted logistic JSON (base64-encoded, GitHub format)
 # Improvement B: obfuscation_key is NOT stored in the JSON — it is held by
-# the key service and injected at runtime by .decrypt_coefficients_in_json().
-make_encrypted_logistic_json <- function(enc_key_hex, obf_key = NULL) {
+# the key service. Obfuscation uses per-model salts also held by the key service.
+make_encrypted_logistic_json <- function(enc_key_hex, obf_key = NULL,
+                                          salt_a = NULL, salt_b = NULL) {
   real_coeffs <- c("(Intercept)" = -1.25, "age" = 0.02, "biomarker_score" = 0.8)
   if (is.null(obf_key)) obf_key <- evaluatr:::.generate_obfuscation_key()
-  obf_coeffs  <- as.list(evaluatr:::.obfuscate_coefficients(real_coeffs, obf_key))
+  if (is.null(salt_a))  salt_a  <- evaluatr:::.generate_salt64()
+  if (is.null(salt_b))  salt_b  <- evaluatr:::.generate_salt64()
+  obf_coeffs  <- as.list(evaluatr:::.obfuscate_coefficients(real_coeffs, obf_key,
+                                                             salt_a, salt_b))
   coeff_json  <- toJSON(obf_coeffs, auto_unbox = TRUE)
 
   key_raw    <- evaluatr:::.hex_to_raw(enc_key_hex)
@@ -799,12 +810,9 @@ make_encrypted_logistic_json <- function(enc_key_hex, obf_key = NULL) {
 
 test_that("Phase 3b: .decrypt_coefficients_in_json decrypts correctly", {
   enc_key_hex <- paste0(rep("a", 64), collapse = "")
-  obf_key     <- evaluatr:::.generate_obfuscation_key()
-  encoded     <- make_encrypted_logistic_json(enc_key_hex, obf_key = obf_key)
+  encoded     <- make_encrypted_logistic_json(enc_key_hex)
 
-  # Pass both keys (Improvement B: obfuscation_key from key service)
-  result <- evaluatr:::.decrypt_coefficients_in_json(encoded, enc_key_hex,
-                                                     obf_key)
+  result <- evaluatr:::.decrypt_coefficients_in_json(encoded, enc_key_hex)
 
   parsed <- jsonlite::fromJSON(rawToChar(openssl::base64_decode(result)),
                                simplifyVector = FALSE)
@@ -813,8 +821,8 @@ test_that("Phase 3b: .decrypt_coefficients_in_json decrypts correctly", {
   expect_false("encryption_iv" %in% names(parsed))
   expect_null(parsed$metadata$encryption)
   expect_true("(Intercept)" %in% names(parsed$coefficients))
-  # obfuscation_key injected into decrypted JSON for C++ engine
-  expect_equal(parsed$obfuscation_key, obf_key)
+  # obfuscation_key is NOT in the JSON (held by key service, not injected here)
+  expect_null(parsed$obfuscation_key)
 })
 
 test_that("Phase 3b: .decrypt_coefficients_in_json passes unencrypted JSON unchanged", {
@@ -837,38 +845,30 @@ test_that("Phase 3b: .decrypt_coefficients_in_json passes unencrypted JSON uncha
 test_that("Phase 3b: wrong key causes decryption error", {
   correct_key <- paste0(rep("c", 64), collapse = "")
   wrong_key   <- paste0(rep("d", 64), collapse = "")
-  obf_key     <- evaluatr:::.generate_obfuscation_key()
-  encoded     <- make_encrypted_logistic_json(correct_key, obf_key = obf_key)
+  encoded     <- make_encrypted_logistic_json(correct_key)
 
   expect_error(
-    evaluatr:::.decrypt_coefficients_in_json(encoded, wrong_key, obf_key)
+    evaluatr:::.decrypt_coefficients_in_json(encoded, wrong_key)
   )
 })
 
-test_that("Phase 3b: .predict_secure with correct key gives same predictions as unencrypted", {
+test_that("Phase 3b: .predict_secure with correct key decrypts and runs without error", {
+  # Verifies the decryption layer works end-to-end. Numeric equality with the
+  # unencrypted path is not tested here: de-obfuscation requires a live Worker B
+  # call (github_token), which is not available in unit tests.
   set.seed(999)
   df          <- make_binary_data(n = 80)
   enc_key_hex <- paste0(rep("e", 64), collapse = "")
-  obf_key     <- evaluatr:::.generate_obfuscation_key()
+  enc_enc     <- make_encrypted_logistic_json(enc_key_hex)
 
-  # Unencrypted path (obfuscation_key embedded in JSON — v1 backward compat)
-  enc_plain    <- make_logistic_json(obfuscated = TRUE, key = obf_key)
-  result_plain <- evaluatr:::.predict_secure(enc_plain, df, "outcome",
-                                             model_id = "plain_test")
-
-  # Encrypted path — obfuscation_key held by key service (Improvement B),
-  # not present in the JSON; passed as separate argument.
-  enc_enc    <- make_encrypted_logistic_json(enc_key_hex, obf_key = obf_key)
-  result_enc <- evaluatr:::.predict_secure(enc_enc, df, "outcome",
-                                           model_id = "enc_test",
-                                           decryption_key  = enc_key_hex,
-                                           obfuscation_key = obf_key)
-
-  # Both should produce the same predictions (sorted, since shuffle is random)
-  expect_equal(sort(round(result_plain$shuffled_predictions, 6)),
-               sort(round(result_enc$shuffled_predictions, 6)),
-               tolerance = 1e-4,
-               label = "encrypted and unencrypted predictions match")
+  expect_no_error({
+    result_enc <- evaluatr:::.predict_secure(enc_enc, df, "outcome",
+                                             model_id      = "enc_test",
+                                             decryption_key = enc_key_hex)
+  })
+  expect_equal(length(result_enc$shuffled_predictions), nrow(df))
+  expect_true(all(result_enc$shuffled_predictions >= 0 &
+                    result_enc$shuffled_predictions <= 1))
 })
 
 test_that("Phase 3b: .predict_secure backward compat — empty key skips decryption", {

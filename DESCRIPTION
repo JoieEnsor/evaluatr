@@ -11,6 +11,7 @@ Description: Provides a two-component system for independent evaluation of clini
     coefficients or transmitting patient data. Performance metrics and diagnostic
     plots for binary prediction models are included.
 License: GPL (>= 3)
+SystemRequirements: libcurl
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

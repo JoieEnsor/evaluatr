@@ -4,12 +4,21 @@
 \alias{.obfuscate_coefficients_cpp}
 \title{Obfuscate coefficient values}
 \usage{
-.obfuscate_coefficients_cpp(real_values, obfuscation_key)
+.obfuscate_coefficients_cpp(
+  real_values,
+  obfuscation_key,
+  salt_a_hex,
+  salt_b_hex
+)
 }
 \arguments{
 \item{real_values}{Named numeric vector of real coefficient values.}
 
 \item{obfuscation_key}{Character. 32-character hex string.}
+
+\item{salt_a_hex}{Character. 16-character hex string (per-model salt A).}
+
+\item{salt_b_hex}{Character. 16-character hex string (per-model salt B).}
 }
 \value{
 Named numeric vector of obfuscated values.
@@ -17,7 +26,7 @@ Named numeric vector of obfuscated values.
 \description{
 Takes real coefficient values and returns obfuscated values using the
 affine transform: stored = (real * mult) + offset, where mult and offset
-are deterministically generated from the obfuscation_key plus compiled salts.
-Used by the developer utility (Phase 2) when creating model JSON files.
+are deterministically generated from the obfuscation_key and per-model
+salts. Used by the developer utility when creating model JSON files.
 }
 \keyword{internal}

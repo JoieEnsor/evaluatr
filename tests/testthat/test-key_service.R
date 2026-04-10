@@ -21,7 +21,9 @@ make_curl_response <- function(status_code, body_list) {
   )
 }
 
-dummy_key <- paste0(rep("a", 64), collapse = "")  # 64 'a's
+dummy_key    <- paste0(rep("a", 64), collapse = "")  # 64 'a's
+dummy_salt_a <- paste0(rep("c", 16), collapse = "")  # 16 'c's
+dummy_salt_b <- paste0(rep("d", 16), collapse = "")  # 16 'd's
 
 # ============================================================
 # .register_model_with_key_service() unit tests
@@ -38,7 +40,9 @@ test_that("successful registration returns 64-char hex encryption_key", {
       model_id        = "test_model_001",
       developer_id    = "JoieEnsor",
       model_name      = "Test Model",
-      obfuscation_key = paste0(rep("a", 32), collapse = "")
+      obfuscation_key = paste0(rep("a", 32), collapse = ""),
+      salt_a          = dummy_salt_a,
+      salt_b          = dummy_salt_b
     ),
     curl_fetch_memory = function(url, handle) mock_response,
     .package = "curl"
@@ -62,7 +66,9 @@ test_that("duplicate model_id (409) stops with informative error", {
         model_id        = "test_model_001",
         developer_id    = "JoieEnsor",
         model_name      = "Test Model",
-        obfuscation_key = paste0(rep("a", 32), collapse = "")
+        obfuscation_key = paste0(rep("a", 32), collapse = ""),
+        salt_a          = dummy_salt_a,
+        salt_b          = dummy_salt_b
       ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
@@ -80,7 +86,9 @@ test_that("non-200 non-409 response from /register stops with error", {
         model_id        = "test_model_001",
         developer_id    = "JoieEnsor",
         model_name      = "Test Model",
-        obfuscation_key = paste0(rep("a", 32), collapse = "")
+        obfuscation_key = paste0(rep("a", 32), collapse = ""),
+        salt_a          = dummy_salt_a,
+        salt_b          = dummy_salt_b
       ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
@@ -96,7 +104,9 @@ test_that("unreachable service stops with informative error", {
         model_id        = "test_model_001",
         developer_id    = "JoieEnsor",
         model_name      = "Test Model",
-        obfuscation_key = paste0(rep("a", 32), collapse = "")
+        obfuscation_key = paste0(rep("a", 32), collapse = ""),
+        salt_a          = dummy_salt_a,
+        salt_b          = dummy_salt_b
       ),
       curl_fetch_memory = function(url, handle) stop("Could not connect"),
       .package = "curl"
@@ -117,7 +127,9 @@ test_that("registration fails with short key (< 64 chars) from service", {
         model_id        = "test_model_001",
         developer_id    = "JoieEnsor",
         model_name      = "Test Model",
-        obfuscation_key = paste0(rep("a", 32), collapse = "")
+        obfuscation_key = paste0(rep("a", 32), collapse = ""),
+        salt_a          = dummy_salt_a,
+        salt_b          = dummy_salt_b
       ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
@@ -130,15 +142,19 @@ test_that("registration fails with short key (< 64 chars) from service", {
 # .fetch_decryption_key() unit tests
 # ============================================================
 
-test_that("successful key fetch returns list with encryption_key and obfuscation_key", {
-  dummy_obf_key <- paste0(rep("b", 32), collapse = "")
+test_that("successful key fetch returns list with encryption_key only", {
   mock_response <- make_curl_response(200, list(
-    encryption_key  = dummy_key,
-    obfuscation_key = dummy_obf_key
+    encryption_key = dummy_key
   ))
 
   result <- with_mocked_bindings(
-    .fetch_decryption_key(model_id = "test_model_001", n = 500L),
+    .fetch_decryption_key(
+      model_id     = "test_model_001",
+      n            = 500L,
+      github_token = "fake_token",
+      repo_owner   = "JoieEnsor",
+      repo_name    = "evaluatr_testing_environment"
+    ),
     curl_fetch_memory = function(url, handle) mock_response,
     .package = "curl"
   )
@@ -146,8 +162,7 @@ test_that("successful key fetch returns list with encryption_key and obfuscation
   expect_type(result, "list")
   expect_equal(nchar(result$encryption_key), 64)
   expect_equal(result$encryption_key, dummy_key)
-  expect_equal(nchar(result$obfuscation_key), 32)
-  expect_equal(result$obfuscation_key, dummy_obf_key)
+  expect_null(result$obfuscation_key)  # obf key no longer returned by Worker A
 })
 
 test_that("unknown model_id (404) stops with informative error", {
@@ -157,11 +172,59 @@ test_that("unknown model_id (404) stops with informative error", {
 
   expect_error(
     with_mocked_bindings(
-      .fetch_decryption_key(model_id = "unknown_model", n = 100L),
+      .fetch_decryption_key(
+        model_id     = "unknown_model",
+        n            = 100L,
+        github_token = "fake_token",
+        repo_owner   = "JoieEnsor",
+        repo_name    = "evaluatr_testing_environment"
+      ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
     ),
     "not registered"
+  )
+})
+
+test_that("invalid GitHub token (401) stops with informative error", {
+  mock_response <- make_curl_response(401, list(
+    error = "GitHub token validation failed: invalid or expired token"
+  ))
+
+  expect_error(
+    with_mocked_bindings(
+      .fetch_decryption_key(
+        model_id     = "test_model_001",
+        n            = 100L,
+        github_token = "bad_token",
+        repo_owner   = "JoieEnsor",
+        repo_name    = "evaluatr_testing_environment"
+      ),
+      curl_fetch_memory = function(url, handle) mock_response,
+      .package = "curl"
+    ),
+    "GitHub token validation failed"
+  )
+})
+
+test_that("rate limit exceeded (429) stops with informative error", {
+  mock_response <- make_curl_response(429, list(
+    error = "Rate limit exceeded"
+  ))
+
+  expect_error(
+    with_mocked_bindings(
+      .fetch_decryption_key(
+        model_id     = "test_model_001",
+        n            = 100L,
+        github_token = "fake_token",
+        repo_owner   = "JoieEnsor",
+        repo_name    = "evaluatr_testing_environment"
+      ),
+      curl_fetch_memory = function(url, handle) mock_response,
+      .package = "curl"
+    ),
+    "rate limit exceeded"
   )
 })
 
@@ -170,7 +233,13 @@ test_that("non-200 non-404 response from /key stops with error", {
 
   expect_error(
     with_mocked_bindings(
-      .fetch_decryption_key(model_id = "test_model_001", n = 100L),
+      .fetch_decryption_key(
+        model_id     = "test_model_001",
+        n            = 100L,
+        github_token = "fake_token",
+        repo_owner   = "JoieEnsor",
+        repo_name    = "evaluatr_testing_environment"
+      ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
     ),
@@ -181,7 +250,13 @@ test_that("non-200 non-404 response from /key stops with error", {
 test_that("unreachable service at /key stops with informative error", {
   expect_error(
     with_mocked_bindings(
-      .fetch_decryption_key(model_id = "test_model_001", n = 100L),
+      .fetch_decryption_key(
+        model_id     = "test_model_001",
+        n            = 100L,
+        github_token = "fake_token",
+        repo_owner   = "JoieEnsor",
+        repo_name    = "evaluatr_testing_environment"
+      ),
       curl_fetch_memory = function(url, handle) stop("Connection refused"),
       .package = "curl"
     ),
@@ -191,13 +266,18 @@ test_that("unreachable service at /key stops with informative error", {
 
 test_that("key fetch fails with short encryption_key (< 64 chars) from service", {
   mock_response <- make_curl_response(200, list(
-    encryption_key  = "bad",
-    obfuscation_key = paste0(rep("b", 32), collapse = "")
+    encryption_key = "bad"
   ))
 
   expect_error(
     with_mocked_bindings(
-      .fetch_decryption_key(model_id = "test_model_001", n = 100L),
+      .fetch_decryption_key(
+        model_id     = "test_model_001",
+        n            = 100L,
+        github_token = "fake_token",
+        repo_owner   = "JoieEnsor",
+        repo_name    = "evaluatr_testing_environment"
+      ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
     ),
@@ -205,27 +285,10 @@ test_that("key fetch fails with short encryption_key (< 64 chars) from service",
   )
 })
 
-test_that("key fetch fails with missing or short obfuscation_key from service", {
-  mock_response <- make_curl_response(200, list(
-    encryption_key  = dummy_key,
-    obfuscation_key = "tooshort"
-  ))
-
-  expect_error(
-    with_mocked_bindings(
-      .fetch_decryption_key(model_id = "test_model_001", n = 100L),
-      curl_fetch_memory = function(url, handle) mock_response,
-      .package = "curl"
-    ),
-    "invalid obfuscation key"
-  )
-})
-
 # ============================================================
 # Integration: secure_model_validation() with key service mocked
 # ============================================================
 
-# Reuse the mock helpers from test-mock_fetch.R inline
 make_mock_logistic_encoded_ks <- function() {
   obj <- list(
     model_type       = "logistic",
@@ -249,11 +312,9 @@ mock_fetch_logistic_ks <- function(api_url, token) {
        http_status = 200, success = TRUE)
 }
 
-mock_fetch_decryption_key_ok <- function(model_id, n) {
-  list(
-    encryption_key  = dummy_key,
-    obfuscation_key = paste0(rep("b", 32), collapse = "")
-  )
+mock_fetch_decryption_key_ok <- function(model_id, n, github_token,
+                                         repo_owner, repo_name) {
+  list(encryption_key = dummy_key)
 }
 
 test_that("secure_model_validation() succeeds with key service mocked", {
@@ -270,7 +331,7 @@ test_that("secure_model_validation() succeeds with key service mocked", {
         repo_owner      = "fake",
         repo_name       = "repo",
         model_id        = "test_model",
-        github_token    = "fake_token",
+        github_token    = "",
         validation_data = df,
         outcome         = "outcome"
       ),
@@ -302,14 +363,15 @@ test_that("secure_model_validation() propagates key service error", {
           repo_owner      = "fake",
           repo_name       = "repo",
           model_id        = "unregistered_model",
-          github_token    = "fake_token",
+          github_token    = "",
           validation_data = df,
           outcome         = "outcome"
         ),
         .fetch_github_model = mock_fetch_logistic_ks,
         .package = "evaluatr"
       ),
-      .fetch_decryption_key = function(model_id, n) {
+      .fetch_decryption_key = function(model_id, n, github_token,
+                                       repo_owner, repo_name) {
         stop("evaluatr key service: model 'unregistered_model' is not registered.")
       },
       .package = "evaluatr"
@@ -323,7 +385,7 @@ test_that("secure_model_validation() propagates key service error", {
 # ============================================================
 
 mock_register_ok <- function(model_id, developer_id, model_name,
-                             obfuscation_key) {
+                             obfuscation_key, salt_a, salt_b) {
   list(
     encryption_key = dummy_key,
     registered_at  = "2026-03-19T12:00:00Z"
@@ -373,7 +435,8 @@ test_that("generate_model_json() propagates registration error", {
         output_dir   = tmp_dir
       ),
       .register_model_with_key_service = function(model_id, developer_id,
-                                                     model_name, obfuscation_key) {
+                                                   model_name, obfuscation_key,
+                                                   salt_a, salt_b) {
         stop("evaluatr key service: model_id 'duplicate_model' is already registered.")
       },
       .package = "evaluatr"

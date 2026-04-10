@@ -242,6 +242,7 @@
 # @return Named list representing the complete JSON structure.
 
 .assemble_model_json <- function(model_type, raw_coefficients, obfuscation_key,
+                                 salt_a, salt_b,
                                  preprocessing, model_parameters, metadata,
                                  encrypted_b64 = NULL, iv_b64 = NULL) {
 
@@ -256,12 +257,16 @@
       obf_coefficients <- vector("list", length(categories))
       names(obf_coefficients) <- categories
       for (cat in categories) {
-        obf_cat <- .obfuscate_coefficients(raw_coefficients[[cat]], obfuscation_key)
+        obf_cat <- .obfuscate_coefficients(
+          raw_coefficients[[cat]], obfuscation_key, salt_a, salt_b
+        )
         obf_coefficients[[cat]] <- as.list(obf_cat)
       }
       coeff_field <- obf_coefficients
     } else {
-      obf_vals    <- .obfuscate_coefficients(raw_coefficients, obfuscation_key)
+      obf_vals    <- .obfuscate_coefficients(
+        raw_coefficients, obfuscation_key, salt_a, salt_b
+      )
       coeff_field <- as.list(obf_vals)
     }
 
@@ -541,8 +546,14 @@ generate_model_json <- function(
     }
   }
 
-  # ---- Generate obfuscation key -----------------------------------------------
+  # ---- Generate obfuscation key and per-model salts ---------------------------
   obfuscation_key <- .generate_obfuscation_key()
+  # Per-model salts: two independent random 64-bit values as 16-char hex strings.
+  # Stored exclusively in the key service; never written to the JSON file.
+  # In Phase 2, C++ reads these from Worker B at prediction time instead of
+  # using the compiled SALT_A / SALT_B constants.
+  salt_a <- .generate_salt64()
+  salt_b <- .generate_salt64()
 
   # ---- Build metadata ---------------------------------------------------------
   metadata <- list(
@@ -559,13 +570,17 @@ generate_model_json <- function(
 
   # ---- Phase 3a/3b: Register model with key service --------------------------
   # Mandatory chokepoint: every model registration is logged.
-  # The obfuscation_key is sent to the key service here and NOT written to the
-  # JSON file. At validation time, .fetch_decryption_key() returns both keys.
+  # The obfuscation_key and per-model salts are sent to the key service here
+  # and NOT written to the JSON file. At validation time, Worker A returns the
+  # encryption key (R side) and Worker B returns the obfuscation key + salts
+  # (C++ side, Phase 2).
   registration <- .register_model_with_key_service(
     model_id        = model_id,
     developer_id    = developer_id,
     model_name      = model_name,
-    obfuscation_key = obfuscation_key
+    obfuscation_key = obfuscation_key,
+    salt_a          = salt_a,
+    salt_b          = salt_b
   )
 
   # ---- Phase 3b: AES-256-GCM encrypt the obfuscated coefficients -------------
@@ -576,10 +591,14 @@ generate_model_json <- function(
   coeff_json <- jsonlite::toJSON(
     if (model_type == "multinomial") {
       lapply(raw_coefficients, function(cat_coeffs) {
-        as.list(.obfuscate_coefficients(cat_coeffs, obfuscation_key))
+        as.list(.obfuscate_coefficients(
+          cat_coeffs, obfuscation_key, salt_a, salt_b
+        ))
       })
     } else {
-      as.list(.obfuscate_coefficients(raw_coefficients, obfuscation_key))
+      as.list(.obfuscate_coefficients(
+        raw_coefficients, obfuscation_key, salt_a, salt_b
+      ))
     },
     auto_unbox = TRUE,
     digits     = 10

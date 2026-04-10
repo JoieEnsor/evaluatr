@@ -20,7 +20,7 @@ library(jsonlite)
 # Mock .register_model_with_key_service() so tests do not need a live key
 # service. Signature updated: now includes salt_a and salt_b (Phase 1).
 mock_register_ok_gj <- function(model_id, developer_id, model_name,
-                                 obfuscation_key, salt_a, salt_b) {
+                                 obfuscation_key, salt_a, salt_b, ...) {
   list(
     encryption_key = paste0(rep("c", 64), collapse = ""),
     registered_at  = "2026-03-19T12:00:00Z"
@@ -44,7 +44,7 @@ with_mocked_gmj_capture <- function(expr) {
   captured_salt_a  <- NULL
   captured_salt_b  <- NULL
   mock_register_capture <- function(model_id, developer_id, model_name,
-                                    obfuscation_key, salt_a, salt_b) {
+                                    obfuscation_key, salt_a, salt_b, ...) {
     captured_obf_key <<- obfuscation_key
     captured_salt_a  <<- salt_a
     captured_salt_b  <<- salt_b

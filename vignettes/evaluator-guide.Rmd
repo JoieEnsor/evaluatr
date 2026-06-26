@@ -13,9 +13,13 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
 
 ## Overview
 
-The **evaluatr** package allows you to independently evaluate a clinical prediction model in your own dataset, without the model developer ever seeing your patient data, and without you ever seeing the model's coefficients. This guide walks you through the complete workflow from installation to performance reporting.
+The **evaluatr** package allows you to independently evaluate a clinical
+prediction model in your own dataset, without the model developer ever seeing
+your patient data. This guide walks you through the complete workflow from installation to performance
+reporting.
 
-The system works as follows. The model developer stores their model specification (coefficients and prediction code) in a private GitHub repository. You use evaluatr to retrieve those specifications and compute predictions entirely within your own R session. Your patient data never leaves your computer.
+The system works as follows. The model developer stores their model
+specification in a private GitHub repository. You use evaluatr to retrieve those specifications and compute predictions entirely within your own R session. Your patient data never leaves your computer.
 
 ## Installation
 
@@ -24,56 +28,65 @@ devtools::install_github("JoieEnsor/evaluatr")
 library(evaluatr)
 ```
 
+## Finding available models
+
+Use `list_registered_models()` to browse publicly registered models and find
+the developer contact for requesting access:
+
+```{r}
+models <- list_registered_models()
+print(models[, c("model_id", "model_name", "developer_email")])
+```
+
 ## What the developer will send you
 
-Before you can run a validation, the model developer must send you four pieces of information:
+Once a developer has agreed to grant you access, they will send you four
+pieces of information:
 
 1. Their **GitHub username** — identifies the account hosting the model
 2. The **repository name** — the name of the private repository
-3. The **model ID** — a short identifier matching a folder in the repository (e.g. `"aki_model_v1"`)
-4. A **time-limited access token** — a fine-grained GitHub personal access token giving read-only access to their repository
+3. The **model ID** — a short identifier matching a folder in the repository
+   (e.g. `"dvt_model_v1"`)
+4. A **time-limited access token** — a fine-grained GitHub personal access
+   token giving read-only access to their repository
 
-Store the token securely. The recommended approach is to save it in your user-level `.Renviron` file so it is never hard-coded in a script:
-
-```{r}
-# Run once — opens your user-level .Renviron
-usethis::edit_r_environ(scope = "user")
-```
-
-Add the following line, save the file, and restart R:
-
-```
-EVALUATR_TOKEN=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
-```
-
-You can then refer to it in your scripts as `Sys.getenv("EVALUATR_TOKEN")`.
+Pass the token directly into the function call as shown in the examples below.
 
 ---
 
 ## Example 1: Basic whole-dataset evaluation
 
-This example uses the MIMIC sample dataset included with evaluatr and a publicly accessible test model to demonstrate the complete workflow.
+This example uses the DVT diagnosis dataset included with the package. It
+illustrates the complete evaluatr workflow for a binary outcome model.
 
 ```{r}
 library(evaluatr)
 
-# Load the sample dataset included with the package
-mimic_path   <- system.file("extdata", "mimic_sample.csv", package = "evaluatr")
-mimic_sample <- read.csv(mimic_path)
+# Load the DVT example dataset
+dvt_path <- system.file("extdata", "dvt_example.csv", package = "evaluatr")
+dvt_data <- read.csv(dvt_path)
+
+# Use studies 6 and 7 as the external validation set
+# (studies 1-5 were used for model development)
+dvt_val <- dvt_data[dvt_data$study %in% c(6, 7), ]
 
 # Run secure validation
-# In real use, replace these with the values sent to you by the developer
+# Replace the values below with those provided by the model developer
 result <- secure_model_validation(
-  repo_owner      = "JoieEnsor",
-  repo_name       = "evaluatr_testing_environment",
-  model_id        = "sample_model_001",
-  github_token    = Sys.getenv("EVALUATR_TOKEN"),
-  validation_data = mimic_sample,
-  outcome         = "AKI"
+  repo_owner      = "developer-username",
+  repo_name       = "my-models",
+  model_id        = "dvt_v1",
+  github_token    = "token_provided_by_developer",
+  validation_data = dvt_val,
+  outcome         = "dvt"
 )
 ```
 
-The `result` object contains a shuffled prediction–outcome matrix. The shuffling means that predictions cannot be matched back to individual patient rows, which prevents reverse-engineering of the model coefficients and ensures the package cannot be used to make predictions for individual patients in clinical practice.
+The `result` object contains a shuffled prediction-outcome matrix. The
+shuffling means that predictions cannot be matched back to individual patient
+rows, which ensures the package
+cannot be used to generate predictions for individual patients in clinical
+practice.
 
 ```{r}
 # Compute performance metrics
@@ -81,8 +94,8 @@ performance <- eval_performance(
   validation_result    = result,
   generate_plots       = TRUE,
   confidence_intervals = TRUE,
-  n_boot               = 50,        # low here for illustration purposes
-  decision_threshold   = 0.25
+  n_boot               = 50,      # low here for illustration purposes
+  decision_threshold   = 0.15     # set to the clinically relevant threshold
 )
 
 # View the metrics table
@@ -100,111 +113,113 @@ The metrics table includes the following:
 |--------|---------|
 | Discrimination | AUROC / c-statistic |
 | Calibration | Intercept, slope, ICI, ECI, ECE, O:E ratio |
-| Overall performance | Brier score, Nagelkerke R², Cox–Snell R², McFadden R² |
+| Overall performance | Brier score, Nagelkerke R², Cox-Snell R², McFadden R² |
 | Clinical utility | Net benefit, standardised net benefit |
 
 ---
 
 ## Example 2: Subgroup evaluation
 
-Many evaluation studies assess model performance separately within clinically relevant subgroups, such as sex, age group, or recruitment site. evaluatr supports this through the `by` argument.
+Many validation studies assess model performance separately within clinically
+relevant subgroups, such as sex, age group, or recruitment site. evaluatr
+supports this through the `by` argument.
 
-The workflow has two stages. First, pass `by` to `secure_model_validation()` so that the subgroup label is retained alongside each shuffled prediction. Second, pass `result$shuffled_by` to `eval_performance()` to obtain separate metrics per subgroup.
+The workflow has two stages. First, pass `by` to `secure_model_validation()`
+so that the subgroup label is retained alongside each shuffled prediction.
+Second, pass `result$shuffled_by` to `eval_performance()` to obtain separate
+metrics per subgroup.
 
 ```{r}
-# Stage 1 — run validation with subgroup labels retained
-result_by_gender <- secure_model_validation(
-  repo_owner      = "JoieEnsor",
-  repo_name       = "evaluatr_testing_environment",
-  model_id        = "sample_model_001",
-  github_token    = Sys.getenv("EVALUATR_TOKEN"),
-  validation_data = mimic_sample,
-  outcome         = "AKI",
-  by              = "gender"    # column name in your dataset
+# Stage 1 — run validation retaining study labels
+result_by_study <- secure_model_validation(
+  repo_owner      = "developer-username",
+  repo_name       = "my-models",
+  model_id        = "dvt_v1",
+  github_token    = "token_provided_by_developer",
+  validation_data = dvt_val,
+  outcome         = "dvt",
+  by              = "study"     # column name in your dataset
 )
 
-# Stage 2 — compute metrics separately per subgroup
-performance_by_gender <- eval_performance(
-  validation_result    = result_by_gender,
+# Stage 2 — compute metrics separately per study
+performance_by_study <- eval_performance(
+  validation_result    = result_by_study,
   generate_plots       = TRUE,
   confidence_intervals = TRUE,
-  n_boot               = 50,
-  decision_threshold   = 0.25,
-  by                   = result_by_gender$shuffled_by
+  n_boot               = 50,      # low here for illustration purposes
+  decision_threshold   = 0.15,
+  by                   = result_by_study$shuffled_by
 )
 
 # The metrics table now has a Subgroup column
-performance_by_gender$metrics
+performance_by_study$metrics
 
 # Plots are organised by subgroup level
-performance_by_gender$plots[["0"]]$calibration   # gender = 0
-performance_by_gender$plots[["1"]]$calibration   # gender = 1
+performance_by_study$plots[["6"]]$calibration   # study 6
+performance_by_study$plots[["7"]]$calibration   # study 7
 ```
 
-Each subgroup must contain at least 50 observations. If any subgroup is smaller than this, `secure_model_validation()` will return an informative error before any predictions are computed.
+Each subgroup must contain at least 50 observations. If any subgroup is
+smaller than this, `secure_model_validation()` will return an informative
+error before any predictions are computed.
 
 ---
 
 ## Example 3: Models requiring pre-processed variables
 
-Some models are developed using transformed variables — for example, a log-transformed creatinine or a squared term. How you handle this depends on whether the developer has embedded the transformation in their model specification.
+Some models are developed using transformed or derived variables — for
+example, an age-squared term or a log-transformed biomarker. How you handle
+this depends on whether the developer has embedded the transformation in their
+model specification.
 
 ### When you need to pre-process (developer specifies transformed variable names)
 
-If the developer's model uses `log_creatinine_mean` as a predictor, you will need to create that column in your dataset before calling `secure_model_validation()`. The developer should document which transformations are required — this will be stated in their publication or communicated alongside the access token.
+If the model requires a variable named `log_pr` (log-progesterone), you will
+need to create that column in your dataset before calling
+`secure_model_validation()`. The developer should document which
+transformations are required in their publication or access token
+communication.
 
 ```{r}
-# Create the required transformed variable before validation
-mimic_sample$log_creatinine_mean <- log(mimic_sample$creatinine_mean + 0.001)
+bc_path <- system.file("extdata", "bc_survival_example.csv",
+                       package = "evaluatr")
+bc_val  <- read.csv(bc_path)
+bc_val  <- bc_val[bc_val$val == 1, ]
 
-# Now run validation — evaluatr will find the log_creatinine_mean column
-result_preprocessed <- secure_model_validation(
-  repo_owner      = "JoieEnsor",
-  repo_name       = "evaluatr_testing_environment",
-  model_id        = "sample_model_002",
-  github_token    = Sys.getenv("EVALUATR_TOKEN"),
-  validation_data = mimic_sample,
-  outcome         = "AKI"
+# Create the required derived variable
+bc_val$log_pr <- log(bc_val$pr + 1)
+
+# Now run validation
+result_bc <- secure_model_validation(
+  repo_owner      = "developer-username",
+  repo_name       = "my-models",
+  model_id        = "bc_cox_v1",
+  github_token    = "token_provided_by_developer",
+  validation_data = bc_val,
+  outcome         = "rfi"
 )
-
-performance_preprocessed <- eval_performance(
-  validation_result    = result_preprocessed,
-  generate_plots       = TRUE,
-  confidence_intervals = TRUE,
-  n_boot               = 50,
-  decision_threshold   = 0.25
-)
-
-performance_preprocessed$metrics
 ```
 
 ### When the developer handles pre-processing automatically
 
-Developers can embed transformation code directly in their model specification. In this case, you provide the raw data and evaluatr handles the rest — no additional steps are required on your side.
+Developers can embed transformation code directly in their model
+specification. In this case, you provide the raw data and evaluatr handles
+the rest — no additional steps are required on your side.
 
 ```{r}
 # No pre-processing needed — the developer's specification handles it
 result_autoprepro <- secure_model_validation(
-  repo_owner      = "JoieEnsor",
-  repo_name       = "evaluatr_testing_environment",
-  model_id        = "sample_model_003",
-  github_token    = Sys.getenv("EVALUATR_TOKEN"),
-  validation_data = mimic_sample,   # raw creatinine_mean provided as-is
-  outcome         = "AKI"
+  repo_owner      = "developer-username",
+  repo_name       = "my-models",
+  model_id        = "bc_cox_auto_v1",
+  github_token    = "token_provided_by_developer",
+  validation_data = bc_val,    # raw pr provided as-is
+  outcome         = "rfi"
 )
-
-performance_autoprepro <- eval_performance(
-  validation_result    = result_autoprepro,
-  generate_plots       = TRUE,
-  confidence_intervals = TRUE,
-  n_boot               = 50,
-  decision_threshold   = 0.25
-)
-
-performance_autoprepro$metrics
 ```
 
-The two approaches produce identical predictions because both use the same underlying model. The difference is purely in who applies the transformation.
+The two approaches produce identical predictions; the difference is purely
+in who applies the transformation.
 
 ---
 
@@ -214,17 +229,24 @@ The two approaches produce identical predictions because both use the same under
 |-------------|-------|
 | Minimum total observations | 50 |
 | Minimum per subgroup (when using `by`) | 50 |
-| Outcome variable | Predictions can be computed for any outcome type. Metrics utility function currently supports only binary outcome models (0/1) |
+| Outcome variable type for `eval_performance()` | Binary (0/1) in the current release. Survival and multinomial predictions can be computed with evaluatr, but performance metrics for these outcome types must currently be calculated independently by the evaluator; full support in `eval_performance()` is planned for a future release. |
 
-These thresholds exist to prevent the package from being used to obtain predictions for individual patients, and to ensure the shuffled output matrix is effective at preventing coefficient reverse-engineering.
+These thresholds exist to prevent the package from being used to obtain
+predictions for individual patients.
 
 ---
 
 ## Security and data privacy
 
-- **Your patient data never leaves your R session.** No data is transmitted to GitHub or to the model developer.
-- **Predictions are shuffled** before being returned, so they cannot be matched back to individual patient rows.
-- The package is designed exclusively for **retrospective evaluation studies**. It must not be used to make predictions that inform care for individual patients.
+- **Your patient data never leaves your R session.** No data is transmitted
+  to GitHub or to the model developer.
+- **Predictions are shuffled** before being returned, so they cannot be
+  matched back to individual patient rows.
+- **Every validation run is logged** by the evaluatr registry, creating an
+  audit trail. Access tokens can be revoked by the developer at any time.
+- The package is designed exclusively for **retrospective evaluation
+  studies**. It must not be used to generate predictions that inform care
+  for individual patients.
 
 ---
 
@@ -232,8 +254,13 @@ These thresholds exist to prevent the package from being used to obtain predicti
 
 If you encounter problems, check the following:
 
-- The token provided by the developer has not expired
-- Your dataset contains all the variable names listed in the developer's documentation
-- If using the utility function for metric computation - check the outcome variable is coded as 0/1
+- The token provided by the developer has not expired.
+- Your dataset contains all the variable names listed in the developer's
+  documentation.
+- If using `eval_performance()`, check that the outcome variable is coded
+  as 0/1 for binary outcomes.
+- The `model_id`, `repo_owner`, and `repo_name` all match exactly what the
+  developer provided (these are case-sensitive).
 
-See `?secure_model_validation` and `?eval_performance` for full argument documentation.
+See `?secure_model_validation` and `?eval_performance` for full argument
+documentation.

@@ -5,7 +5,7 @@
 # with_mocked_bindings() on curl::curl_fetch_memory so that no network
 # access is required.
 #
-# Integration tests for secure_model_validation() and generate_model_json()
+# Integration tests for secure_model_validation() and register_model()
 # with key service calls mocked are also included here.
 
 library(jsonlite)
@@ -381,7 +381,7 @@ test_that("secure_model_validation() propagates key service error", {
 })
 
 # ============================================================
-# Integration: generate_model_json() with key service mocked
+# Integration: register_model() with key service mocked
 # ============================================================
 
 mock_register_ok <- function(model_id, developer_id, model_name,
@@ -392,13 +392,13 @@ mock_register_ok <- function(model_id, developer_id, model_name,
   )
 }
 
-test_that("generate_model_json() succeeds with registration mocked", {
+test_that("register_model() succeeds with registration mocked", {
   tmp_dir <- tempfile()
   dir.create(tmp_dir)
   on.exit(unlink(tmp_dir, recursive = TRUE))
 
   result <- with_mocked_bindings(
-    generate_model_json(
+    register_model(
       coefficients = c("(Intercept)" = -1.25, age = 0.02, score = 0.8),
       model_type   = "logistic",
       model_id     = "test_json_001",
@@ -414,17 +414,17 @@ test_that("generate_model_json() succeeds with registration mocked", {
 
   expect_type(result, "list")
   expect_equal(result$model_type, "logistic")
-  expect_true(file.exists(file.path(tmp_dir, "coefficients.json")))
+  expect_true(file.exists(file.path(tmp_dir, "test_json_001_specification.json")))
 })
 
-test_that("generate_model_json() propagates registration error", {
+test_that("register_model() propagates registration error", {
   tmp_dir <- tempfile()
   dir.create(tmp_dir)
   on.exit(unlink(tmp_dir, recursive = TRUE))
 
   expect_error(
     with_mocked_bindings(
-      generate_model_json(
+      register_model(
         coefficients = c("(Intercept)" = -1.25, age = 0.02),
         model_type   = "logistic",
         model_id     = "duplicate_model",
@@ -445,13 +445,13 @@ test_that("generate_model_json() propagates registration error", {
   )
 })
 
-test_that("generate_model_json() requires developer_id", {
+test_that("register_model() requires developer_id", {
   tmp_dir <- tempfile()
   dir.create(tmp_dir)
   on.exit(unlink(tmp_dir, recursive = TRUE))
 
   expect_error(
-    generate_model_json(
+    register_model(
       coefficients = c("(Intercept)" = -1.25, age = 0.02),
       model_type   = "logistic",
       model_id     = "test_001",
@@ -465,13 +465,13 @@ test_that("generate_model_json() requires developer_id", {
   )
 })
 
-test_that("generate_model_json() rejects empty developer_id string", {
+test_that("register_model() rejects empty developer_id string", {
   tmp_dir <- tempfile()
   dir.create(tmp_dir)
   on.exit(unlink(tmp_dir, recursive = TRUE))
 
   expect_error(
-    generate_model_json(
+    register_model(
       coefficients = c("(Intercept)" = -1.25, age = 0.02),
       model_type   = "logistic",
       model_id     = "test_001",
@@ -538,13 +538,13 @@ test_that("registration with public_listing = FALSE is forwarded", {
   expect_equal(result$encryption_key, dummy_key)
 })
 
-test_that("generate_model_json() forwards registry fields to key service", {
+test_that("register_model() forwards registry fields to key service", {
   tmp_dir <- tempfile()
   dir.create(tmp_dir)
   on.exit(unlink(tmp_dir, recursive = TRUE))
 
   result <- with_mocked_bindings(
-    generate_model_json(
+    register_model(
       coefficients      = c("(Intercept)" = -1.25, age = 0.02),
       model_type        = "logistic",
       model_id          = "registry_test_json",
@@ -573,7 +573,7 @@ test_that("generate_model_json() forwards registry fields to key service", {
   )
 
   expect_type(result, "list")
-  expect_true(file.exists(file.path(tmp_dir, "coefficients.json")))
+  expect_true(file.exists(file.path(tmp_dir, "registry_test_json_specification.json")))
 })
 
 # ============================================================

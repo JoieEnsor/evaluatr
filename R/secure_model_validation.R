@@ -56,7 +56,7 @@
 #'
 #' Retrieves a clinical prediction model specification from a developer's
 #' private GitHub repository and computes predictions locally on the
-#' evaluator's dataset, without exposing model coefficients or transmitting
+#' evaluator's dataset, without transmitting
 #' patient data.
 #'
 #' @param repo_owner Character. GitHub username or organisation owning the
@@ -66,22 +66,23 @@
 #' @param model_id Character. Unique identifier for the model (must match the
 #'   folder name under `models/` in the repository).
 #' @param github_token Character. Fine-grained GitHub personal access token
-#'   with read access to the repository. Provided by the model developer.
+#'   with read-only access to the repository. Provided by the model developer.
 #' @param validation_data Data frame. The evaluator's local dataset, which
 #'   must contain all predictor variables required by the model.
 #' @param outcome Character. Name of the outcome variable in
 #'   `validation_data`.
 #' @param by Character or `NULL`. Optional name of a grouping variable in
-#'   `validation_data` for subgroup analysis (e.g. `"sex"`). Must have at
-#'   least two non-missing categories, each with \eqn{\geq 20} observations.
+#'   `validation_data` for subgroup analysis (e.g. `"study"`). Must have at
+#'   least two non-missing categories, each meeting the minimum observation
+#'   requirement.
 #'
-#' @return A named list containing:
+#' @return A named list of class `evaluatr_result` containing:
 #' \describe{
 #'   \item{`shuffled_outcome_predictions`}{Matrix of shuffled outcome-prediction
 #'     pairs (and subgroup column if `by` is specified).}
 #'   \item{`shuffled_outcomes`}{Numeric vector of shuffled outcomes.}
 #'   \item{`shuffled_predictions`}{Numeric vector of shuffled predicted
-#'     probabilities (binary/continuous models only).}
+#'     probabilities (binary models only).}
 #'   \item{`shuffled_by`}{Vector of shuffled subgroup values (only present
 #'     when `by` is specified).}
 #'   \item{`prediction_matrix`}{Matrix of shuffled predicted probabilities
@@ -92,43 +93,66 @@
 #' }
 #'
 #' @details
-#' The function enforces a minimum dataset size of 50 observations (per
-#' subgroup when `by` is used). Predictions are shuffled before being
-#' returned so that they cannot be matched back to individual patient records,
-#' preventing reverse-engineering of model coefficients and ensuring the
-#' system cannot be used to make predictions for individual patients in
-#' clinical practice.
+#' A minimum dataset size is enforced (per subgroup when `by` is used).
+#' Predictions are shuffled before being returned so that they cannot be
+#' matched back to individual patient records, preventing reverse-engineering
+#' of model coefficients and ensuring the system cannot be used to make
+#' predictions for individual patients in clinical practice.
 #'
-#' The `outcome` variable is not transmitted to GitHub; model coefficients
-#' are retrieved but immediately cleared from memory after predictions are
-#' computed.
+#' Patient data is never transmitted outside your R session. The validation event is logged by the evaluatr registry.
+#'
+#' To use this function you need four items from the model developer: their
+#' GitHub username, repository name, model ID, and a time-limited access
+#' token. See the evaluator guide vignette (\code{vignette("evaluator-guide",
+#' package = "evaluatr")}) for a step-by-step walkthrough. Use
+#' [list_registered_models()] to browse publicly registered models and find
+#' developer contact details.
 #'
 #' @examples
 #' \dontrun{
-#' # Basic usage with a binary outcome model
+#' # Load the DVT example dataset included with the package
+#' dvt_path <- system.file("extdata", "dvt_example.csv", package = "evaluatr")
+#' dvt_data <- read.csv(dvt_path)
+#'
+#' # Use only studies 6-7 as the external validation set
+#' dvt_val <- dvt_data[dvt_data$study %in% c(6, 7), ]
+#'
+#' # Run secure validation
+#' # Replace the values below with those supplied by the model developer
 #' result <- secure_model_validation(
-#'   repo_owner    = "developer-username",
-#'   repo_name     = "my-models",
-#'   model_id      = "sample_model_001",
-#'   github_token  = Sys.getenv("GITHUB_PAT"),
-#'   validation_data = my_data,
-#'   outcome       = "event"
+#'   repo_owner      = "developer-username",
+#'   repo_name       = "my-models",
+#'   model_id        = "dvt_model_v1",
+#'   github_token    = Sys.getenv("EVALUATR_TOKEN"),
+#'   validation_data = dvt_val,
+#'   outcome         = "dvt"
 #' )
 #'
-#' # Subgroup analysis by sex
-#' result_by_sex <- secure_model_validation(
-#'   repo_owner    = "developer-username",
-#'   repo_name     = "my-models",
-#'   model_id      = "sample_model_001",
-#'   github_token  = Sys.getenv("GITHUB_PAT"),
-#'   validation_data = my_data,
-#'   outcome       = "event",
-#'   by            = "sex"
+#' # Compute performance metrics
+#' perf <- eval_performance(result)
+#' perf$metrics
+#'
+#' # Subgroup analysis by study
+#' result_by_study <- secure_model_validation(
+#'   repo_owner      = "developer-username",
+#'   repo_name       = "my-models",
+#'   model_id        = "dvt_model_v1",
+#'   github_token    = Sys.getenv("EVALUATR_TOKEN"),
+#'   validation_data = dvt_val,
+#'   outcome         = "dvt",
+#'   by              = "study"
 #' )
+#'
+#' perf_by_study <- eval_performance(
+#'   result_by_study,
+#'   by = result_by_study$shuffled_by
+#' )
+#' perf_by_study$metrics
 #' }
 #'
-#' @seealso [eval_performance()] for computing performance metrics
-#'   from the returned object.
+#' @seealso [eval_performance()] for computing performance metrics from the
+#'   returned object. [list_registered_models()] to browse publicly registered
+#'   models.
 #'
 #' @export
 secure_model_validation <- function(repo_owner, repo_name, model_id,
@@ -176,7 +200,7 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
   }
 
   # ---- Fetch model from GitHub ------------------------------------------------
-  file_path <- paste0("models/", model_id, "/coefficients.json")
+  file_path <- paste0(model_id, "/", model_id, "_specification.json")
   api_url   <- paste0("https://api.github.com/repos/", repo_owner, "/",
                       repo_name, "/contents/", file_path)
 

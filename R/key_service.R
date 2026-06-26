@@ -16,7 +16,7 @@
 
 # ---- .register_model_with_key_service() -------------------------------------
 #
-# Called by generate_model_json() once per model.
+# Called by register_model() once per model.
 # Returns a list with $encryption_key and $registered_at.
 # Stops with an informative error on failure.
 #
@@ -116,8 +116,8 @@
 #' data frame you can use to find models available for validation and to
 #' identify the developer contact for requesting a validation token.
 #'
-#' Only models registered with `public_listing = TRUE` (the default) appear
-#' in the results.
+#' Only models registered with `public_listing = TRUE` (the default in
+#' [register_model()]) appear in the results.
 #'
 #' @param as_data_frame Logical. If `TRUE` (default) return a `data.frame`.
 #'   If `FALSE` return the raw parsed list from the JSON response.
@@ -128,21 +128,32 @@
 #'       [secure_model_validation()] as `model_id`).}
 #'     \item{model_name}{Human-readable model name.}
 #'     \item{developer_id}{Developer's evaluatr identifier.}
-#'     \item{developer_name}{Developer's real name (may be `NA` if not
-#'       provided at registration).}
+#'     \item{developer_name}{Developer's name (may be `NA` if not provided
+#'       at registration).}
 #'     \item{developer_email}{Contact email for requesting a validation token
-#'       (may be `NA` if not provided).}
+#'       (may be `NA` if not provided at registration).}
 #'     \item{model_description}{Free-text description of the model (may be
-#'       `NA` if not provided).}
+#'       `NA` if not provided at registration).}
 #'   }
+#'
+#' @details
+#' To validate a model, contact the developer at the listed email address and
+#' request a time-limited access token. Once you have the token, pass it to
+#' [secure_model_validation()] along with the `developer_id` as `repo_owner`,
+#' the repository name the developer provides as `repo_name`, and the
+#' `model_id` from this table.
 #'
 #' @examples
 #' \dontrun{
-#' # List all publicly registered models
+#' # Browse all publicly registered models
 #' models <- list_registered_models()
 #' print(models[, c("model_id", "model_name", "developer_email")])
+#'
+#' # Find models by a specific developer
+#' subset(models, developer_id == "JoieEnsor")
 #' }
 #'
+#' @seealso [secure_model_validation()], [register_model()]
 #' @export
 list_registered_models <- function(as_data_frame = TRUE) {
 
@@ -303,7 +314,7 @@ list_registered_models <- function(as_data_frame = TRUE) {
 
   if (response$status_code == 404) {
     stop("evaluatr key service: model '", model_id, "' is not registered. ",
-         "The developer must run generate_model_json() before the model can be validated.",
+         "The developer must run register_model() before the model can be validated.",
          call. = FALSE)
   }
 

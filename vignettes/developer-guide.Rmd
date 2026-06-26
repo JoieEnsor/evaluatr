@@ -13,261 +13,317 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
 
 ## Overview
 
-This guide explains how to set up your model so that independent evaluators can use the evaluatr package to validate it in their own datasets, without you ever accessing their patient data and without them ever seeing your model coefficients.
+This guide explains how to make your model available for independent external
+validation using evaluatr. Independent evaluators will be able to run
+`secure_model_validation()` in their own datasets, without you ever seeing
+their patient data and without them ever seeing your model's coefficients.
 
-The system requires two things from you as a developer:
+You will need:
 
-1. A **private GitHub repository** containing a JSON file with your model specification
-2. A **fine-grained access token** that you issue to each evaluator, giving them read-only access to your repository
+1. A **private GitHub repository** to host the model specification file
+2. The **evaluatr package** installed locally to generate that file
+3. A **developer account** — just your GitHub username
 
-This takes approximately 30 minutes to set up for the first model, and much less for subsequent ones.
+This takes approximately 30 minutes to set up for the first model, and much
+less for subsequent ones.
 
 ---
 
 ## Step 1: Create a private GitHub repository
 
-If you do not already have a GitHub account, create one at [github.com](https://github.com). Then create a new repository:
+If you do not already have a GitHub account, create one at
+[github.com](https://github.com). Then create a new repository:
 
 - Set the visibility to **Private**
 - Choose a clear, memorable name (e.g. `my-clinical-models`)
 - Do not initialise with a README
 
-Your repository will hold one or more model specifications. Each model lives in its own subfolder following this structure:
+Your repository will hold one or more model specifications. The required
+folder structure is:
 
 ```
 my-clinical-models/
-└── models/
-    ├── model_v1/
-    │   └── coefficients.json
-    └── model_v2/
-        └── coefficients.json
+├── model_v1/
+│   └── model_v1_specification.json
+└── model_v2/
+    └── model_v2_specification.json
 ```
 
-The folder name (e.g. `model_v1`) becomes the `model_id` that evaluators will use. The file must be named `coefficients.json`.
+The folder name (e.g. `model_v1`) becomes the `model_id` that evaluators
+will use. The specification file must be named `{model_id}_specification.json`.
 
 ---
 
-## Step 2: Write your model specification JSON
+## Step 2: Install evaluatr and generate your model specification
 
-The JSON file contains four fields: `model_type`, `coefficients`, `prediction_function`, and `metadata`. The examples below cover the most common model types.
-
-### Example A: Standard logistic regression
-
-This is the simplest case. The coefficients are named to match the variable names in the development dataset, and the prediction function converts the linear predictor (LP) to a probability.
-
-The LP is computed automatically by evaluatr using the named coefficients and the evaluator's data — you do not need to compute it yourself in the prediction function for standard models.
-
-```json
-{
-  "model_type": "logistic_regression",
-  "coefficients": {
-    "(Intercept)": -1.25,
-    "age": 0.02,
-    "biomarker_score": 0.80,
-    "treatment_group": -0.60
-  },
-  "prediction_function": "probabilities <- 1 / (1 + exp(-LP)) \n result_matrix <- matrix(probabilities, ncol = 1) \n colnames(result_matrix) <- 'probability' \n result_matrix",
-  "required_packages": [],
-  "metadata": {
-    "model_name": "My Clinical Risk Score",
-    "version": "1.0",
-    "created_date": "2025-01-01",
-    "outcome_type": "binary",
-    "variables": ["age", "biomarker_score", "treatment_group"],
-    "description": "Logistic regression predicting 30-day readmission."
-  }
-}
-```
-
-The `prediction_function` field contains R code as a single string. Each new line in your R code is represented by `\n`. The code has access to `LP` (the pre-computed linear predictor) and must return a matrix. See the formatting section below for how to write this comfortably.
-
-### Example B: Model using transformed variables — evaluator pre-processes
-
-If your model uses a transformed predictor (e.g. log-creatinine), you have two options. In this example, the evaluator is expected to create the transformed column themselves before calling `secure_model_validation()`. The `variables` field lists the transformed name, signalling to the evaluator what column must exist.
-
-```json
-{
-  "model_type": "logistic_regression",
-  "coefficients": {
-    "(Intercept)": 2.10,
-    "age": 0.018,
-    "log_creatinine": 1.89
-  },
-  "prediction_function": "probabilities <- 1 / (1 + exp(-LP)) \n result_matrix <- matrix(probabilities, ncol = 1) \n colnames(result_matrix) <- 'probability' \n result_matrix",
-  "required_packages": [],
-  "metadata": {
-    "model_name": "AKI Risk Score (log creatinine)",
-    "version": "1.0",
-    "created_date": "2025-01-01",
-    "outcome_type": "binary",
-    "variables": ["age", "log_creatinine"],
-    "description": "Requires log_creatinine = log(creatinine + 0.001) to be created by the evaluator before validation."
-  }
-}
-```
-
-Always document the exact transformation required in your model description and in your published paper. Evaluators will create the column and pass the dataset with the transformed variable included.
-
-### Example C: Model using transformed variables — developer embeds pre-processing
-
-Alternatively, you can embed the transformation directly in the `prediction_function`. This is the recommended approach when possible: the evaluator provides raw data and your code handles everything. This eliminates the risk of the evaluator applying a slightly different transformation.
-
-When you embed pre-processing, you must also recompute the LP yourself inside the prediction function (rather than relying on the automatically computed LP), because the transformation creates the new variable after the automatic LP computation has already run.
-
-```json
-{
-  "model_type": "logistic_regression",
-  "coefficients": {
-    "(Intercept)": 2.10,
-    "age": 0.018,
-    "log_creatinine": 1.89
-  },
-  "prediction_function": "validation_data$log_creatinine <- log(validation_data$creatinine + 0.001) \n LP <- `(Intercept)` + age * validation_data$age + log_creatinine * validation_data$log_creatinine \n probabilities <- 1 / (1 + exp(-LP)) \n result_matrix <- matrix(probabilities, ncol = 1) \n colnames(result_matrix) <- 'probability' \n result_matrix",
-  "required_packages": [],
-  "metadata": {
-    "model_name": "AKI Risk Score (log creatinine, auto pre-processing)",
-    "version": "1.0",
-    "created_date": "2025-01-01",
-    "outcome_type": "binary",
-    "variables": ["age", "creatinine"],
-    "description": "Evaluator provides raw creatinine. Log transformation is applied automatically."
-  }
-}
-```
-
-Note that the `variables` field now lists `creatinine` (the raw column the evaluator provides), not `log_creatinine`. This is what evaluatr checks for when verifying the evaluator's dataset contains the required columns.
-
-In the prediction function, the coefficient names (e.g. `log_creatinine`, `age`) are available as named objects in the execution environment alongside `validation_data`. This is why `log_creatinine * validation_data$log_creatinine` correctly multiplies the coefficient value by the data column.
-
-### Example D: Multinomial logistic regression
-
-For multinomial models, the prediction function must return a matrix with one column per outcome category. LP is not pre-computed by evaluatr for multinomial models — your prediction function handles everything.
-
-```json
-{
-  "model_type": "multinomial_logistic",
-  "coefficients": {
-    "z1_intercept": -3.46,
-    "z1_age": 0.012,
-    "z2_intercept": -3.36,
-    "z2_age": 0.011
-  },
-  "prediction_function": "z1 <- z1_intercept + z1_age * validation_data$age \n z2 <- z2_intercept + z2_age * validation_data$age \n denom <- 1 + exp(z1) + exp(z2) \n result_matrix <- cbind( \n  category_A = 1 / denom, \n  category_B = exp(z1) / denom, \n  category_C = exp(z2) / denom \n ) \n result_matrix",
-  "required_packages": [],
-  "metadata": {
-    "model_name": "Three-Category Outcome Model",
-    "version": "1.0",
-    "created_date": "2025-01-01",
-    "outcome_type": "multinomial",
-    "outcome_categories": ["category_A", "category_B", "category_C"],
-    "reference_category": "category_A",
-    "variables": ["age"],
-    "description": "Multinomial logistic regression with three outcome categories."
-  }
-}
-```
-
----
-
-## Writing the prediction_function field comfortably
-
-The JSON format requires the prediction function to be a single string with `\n` representing line breaks. Writing this directly in a JSON file is awkward. The recommended workflow is:
-
-1. Write and test your prediction function as a normal R script
-2. When satisfied, convert it for JSON by replacing each newline with `\n`
-
-You can do this conversion in R:
+The `register_model()` function creates the protected model specification
+file and registers the model with the evaluatr registry. Both steps happen
+in a single call and must complete before any evaluator can validate the model.
 
 ```{r}
-# Write your function as normal R code
-my_function <- '
-probabilities <- 1 / (1 + exp(-LP))
-result_matrix <- matrix(probabilities, ncol = 1)
-colnames(result_matrix) <- "probability"
-result_matrix
-'
-
-# Convert to JSON-safe single string
-json_safe <- gsub("\n", "\\n", trimws(my_function))
-cat(json_safe)
-# Copy the output and paste into your JSON file
-```
-
-A developer utility function to generate complete JSON files from R model objects is planned for a future version of evaluatr.
-
----
-
-## Step 3: Verify your specification
-
-Before sharing with any evaluator, test that your JSON produces correct predictions. The cleanest approach is to apply your coefficients manually in R and compare to what evaluatr returns.
-
-```{r}
+devtools::install_github("JoieEnsor/evaluatr")
 library(evaluatr)
+```
 
-# Use your own development dataset for this check
-dev_data <- read.csv("path/to/your/development_data.csv")
+### Example A: Logistic regression (DVT diagnosis model)
 
-# Compute predictions manually (exactly as you would from the model object)
-manual_lp    <- -1.25 + 0.02 * dev_data$age + 0.80 * dev_data$biomarker_score
-manual_probs <- 1 / (1 + exp(-manual_lp))
+The DVT example dataset included with the package spans seven studies. Studies
+1-5 are used here for model development; studies 6-7 are reserved for
+external validation.
 
-# Compute predictions via evaluatr using your GitHub repo
-result <- secure_model_validation(
+```{r}
+dvt_path <- system.file("extdata", "dvt_example.csv", package = "evaluatr")
+dvt_data <- read.csv(dvt_path)
+
+# Development set: studies 1-5
+dvt_dev <- dvt_data[dvt_data$study %in% 1:5, ]
+
+# Fit a logistic regression model
+dvt_fit <- glm(dvt ~ male + ab_ddimer + calf_diff + vein_distension +
+                     malignancy + immobile,
+               data = dvt_dev, family = binomial)
+
+# Generate the protected model specification file
+register_model(
+  model           = dvt_fit,
+  model_id        = "dvt_v1",
+  developer_id    = "your-github-username",    # your GitHub username
+  model_name      = "DVT Diagnosis Model v1",
+  description     = paste(
+    "Logistic regression for DVT diagnosis. Developed in studies 1-5",
+    "of the simulated DVT example dataset.",
+    "Predictors: male, ab_ddimer, calf_diff, vein_distension, malignancy, immobile."
+  ),
+  developer_name  = "Your Name",
+  developer_email = "you@institution.ac.uk",
+  output_dir      = "dvt_v1"
+)
+```
+
+This writes `dvt_v1/dvt_v1_specification.json`. The coefficient values are
+protected; the file is safe to host in your GitHub repository.
+
+### Example B: Cox proportional hazards model (breast cancer relapse)
+
+```{r}
+library(survival)
+
+bc_path <- system.file("extdata", "bc_survival_example.csv",
+                       package = "evaluatr")
+bc_data <- read.csv(bc_path)
+bc_dev  <- bc_data[bc_data$val == 0, ]
+
+# Fit a Cox model
+cox_fit <- coxph(Surv(rf, rfi) ~ age + nodes + pr + er + hormon,
+                 data = bc_dev, x = TRUE)
+
+# Extract baseline survival at 5 and 10 years (60 and 120 months)
+bh     <- basehaz(cox_fit, centered = FALSE)
+S0_60  <- exp(-bh$hazard[which.min(abs(bh$time - 60))])
+S0_120 <- exp(-bh$hazard[which.min(abs(bh$time - 120))])
+
+register_model(
+  model            = cox_fit,
+  model_id         = "bc_cox_v1",
+  developer_id     = "your-github-username",
+  model_name       = "Breast Cancer Relapse-Free Survival Model",
+  description      = paste(
+    "Cox PH model for relapse-free survival in breast cancer.",
+    "Developed in the training set (val == 0) of the bc_survival_example dataset.",
+    "Predictors: age, nodes, pr, er, hormon."
+  ),
+  model_parameters = list(
+    timepoints        = c(60, 120),
+    baseline_survival = c(S0_60, S0_120)
+  ),
+  developer_name  = "Your Name",
+  developer_email = "you@institution.ac.uk",
+  output_dir      = "bc_cox_v1"
+)
+```
+
+For Cox models, `model_parameters` must include `timepoints` and
+`baseline_survival` so that evaluatr can produce predicted survival
+probabilities at specific time-points.
+
+### Example C: Model with embedded pre-processing
+
+If your model uses derived or transformed predictors, you can embed the
+transformation so that evaluators provide raw data with no additional steps
+required on their side. Supply an R code string as the `preprocessing`
+argument:
+
+```{r}
+# A Cox model using log-transformed pr and er
+cox_log_fit <- coxph(Surv(rf, rfi) ~ age + nodes + log(pr + 1) + log(er + 1),
+                     data = bc_dev, x = TRUE)
+
+bh2     <- basehaz(cox_log_fit, centered = FALSE)
+S0_60b  <- exp(-bh2$hazard[which.min(abs(bh2$time - 60))])
+S0_120b <- exp(-bh2$hazard[which.min(abs(bh2$time - 120))])
+
+register_model(
+  model            = cox_log_fit,
+  model_id         = "bc_cox_log_v1",
+  developer_id     = "your-github-username",
+  model_name       = "BC Survival Model (log biomarkers)",
+  preprocessing    = "
+    validation_data$`log(pr + 1)` <- log(validation_data$pr + 1)
+    validation_data$`log(er + 1)` <- log(validation_data$er + 1)
+  ",
+  model_parameters = list(
+    timepoints        = c(60, 120),
+    baseline_survival = c(S0_60b, S0_120b)
+  ),
+  developer_name  = "Your Name",
+  developer_email = "you@institution.ac.uk",
+  output_dir      = "bc_cox_log_v1"
+)
+```
+
+The preprocessing code is run on `validation_data` (the evaluator's dataset)
+before prediction. The code must create any derived columns in place. It has
+access only to `validation_data`.
+
+If you do not embed preprocessing, the variable names in `variables` (or
+the coefficient names extracted from your model) must match the column names
+the evaluator will have in their dataset. Document any required
+transformations clearly in the model description.
+
+### Example D: Manual coefficient specification
+
+If your coefficients come from a publication or software other than R, you
+can supply them directly:
+
+```{r}
+register_model(
+  coefficients = c("(Intercept)" = -3.2,
+                   ab_ddimer     =  1.8,
+                   calf_diff     =  1.1,
+                   vein_distension = 0.9),
+  model_type   = "logistic",
+  model_id     = "dvt_published_v1",
+  developer_id = "your-github-username",
+  model_name   = "Published DVT Score (manual)",
+  outcome_type = "binary",
+  variables    = c("ab_ddimer", "calf_diff", "vein_distension"),
+  description  = "Coefficients from Smith et al. (2024), Table 2.",
+  developer_name  = "Your Name",
+  developer_email = "you@institution.ac.uk",
+  output_dir   = "dvt_published_v1"
+)
+```
+
+### Keeping a model private while a paper is under review
+
+Set `public_listing = FALSE` to register the model without it appearing in
+the public directory. You can still issue tokens to peer reviewers or journal
+editors. Update to `public_listing = TRUE` by re-running
+`register_model()` with a new `model_id` when ready to publish.
+
+---
+
+## Step 3: Verify your model specification
+
+Before sharing with any evaluator, confirm that evaluatr's predictions match
+your own. Because `secure_model_validation()` returns shuffled predictions,
+sort both sets before comparing:
+
+```{r}
+# Validate in your own development data using your own full-access PAT
+result_check <- secure_model_validation(
   repo_owner      = "your-github-username",
   repo_name       = "my-clinical-models",
-  model_id        = "model_v1",
-  github_token    = Sys.getenv("GITHUB_PAT"),   # your own PAT, full access
-  validation_data = dev_data,
-  outcome         = "outcome_column"
+  model_id        = "dvt_v1",
+  github_token    = Sys.getenv("GITHUB_PAT"),   # your own full-access PAT
+  validation_data = dvt_dev,
+  outcome         = "dvt"
 )
 
-# Sort both sets of predictions and compare
-# (result is shuffled, so sort before comparing)
-max(abs(sort(manual_probs) - sort(result$shuffled_predictions)))
-# Should be < 1e-10 if the JSON is correct
+# Your own predictions (unsorted)
+manual_probs <- predict(dvt_fit, type = "response")
+
+# Sort both and compare
+max(abs(sort(manual_probs) - sort(result_check$shuffled_predictions)))
+# Should be < 1e-6
 ```
 
-If the maximum difference exceeds `1e-10`, there is a precision or formula error in your JSON. Check coefficient values and the prediction function code carefully.
+A difference larger than `1e-4` indicates a coefficient or transformation
+mismatch. Check variable names and ordering carefully.
 
 ---
 
-## Step 4: Issue access tokens to evaluators
+## Step 4: Upload to GitHub
 
-For each evaluator (or group of evaluators), create a fine-grained personal access token:
+Upload the generated file to your private repository at the path:
 
-1. Go to GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+```
+<model_id>/<model_id>_specification.json
+```
+
+For example, for `model_id = "dvt_v1"`:
+
+```
+my-clinical-models/
+└── dvt_v1/
+    └── dvt_v1_specification.json
+```
+
+You can do this via the GitHub web interface (drag and drop into the correct
+folder) or using the command line:
+
+```bash
+git add dvt_v1/dvt_v1_specification.json
+git commit -m "Add DVT v1 model specification"
+git push
+```
+
+---
+
+## Step 5: Issue access tokens to evaluators
+
+For each evaluator (or group of evaluators), create a fine-grained personal
+access token:
+
+1. Go to GitHub → Settings → Developer settings → Personal access tokens →
+   Fine-grained tokens
 2. Click **Generate new token**
-3. Under **Repository access**, select **Only select repositories** and choose your model repository
-4. Under **Permissions**, set **Contents** to **Read-only** (no other permissions needed)
+3. Under **Repository access**, select **Only select repositories** and
+   choose your model repository
+4. Under **Permissions**, set **Contents** to **Read-only**
+   (no other permissions are needed)
 5. Set an appropriate **Expiration** — we recommend a short-lived token
 6. Generate and copy the token
 
-Send the token to the evaluator along with your GitHub username, repository name, and model ID. The token gives read-only access to the repository contents only — it cannot be used to modify your repository or access any other part of your GitHub account.
+Send the token to the evaluator along with your GitHub username, repository
+name, and model ID.
 
-**Each evaluator should receive a unique token.** This allows you to revoke access for a specific evaluator without affecting others, and gives you an audit trail of who has accessed the model specification.
+**Issue a unique token per evaluator.** This lets you revoke access for a
+specific evaluator without affecting others and creates an audit trail of who
+has accessed the model specification.
 
 ---
 
 ## Repository structure summary
 
 ```
-my-clinical-models/               ← private GitHub repository
-└── models/
-    ├── model_v1/
-    │   └── coefficients.json     ← model_id = "model_v1"
-    └── model_v2/
-        └── coefficients.json     ← model_id = "model_v2"
+my-clinical-models/                          ← private GitHub repository
+├── dvt_v1/
+│   └── dvt_v1_specification.json            ← model_id = "dvt_v1"
+└── bc_cox_v1/
+    └── bc_cox_v1_specification.json          ← model_id = "bc_cox_v1"
 ```
 
 The evaluator calls:
 
 ```{r}
 secure_model_validation(
-  repo_owner   = "your-github-username",
-  repo_name    = "my-clinical-models",
-  model_id     = "model_v1",
-  github_token = "token_you_issued",
-  ...
+  repo_owner      = "your-github-username",
+  repo_name       = "my-clinical-models",
+  model_id        = "dvt_v1",
+  github_token    = "token_you_issued",
+  validation_data = their_data,
+  outcome         = "dvt"
 )
 ```
 
@@ -275,10 +331,18 @@ secure_model_validation(
 
 ## Checklist before sharing with evaluators
 
-- [ ] JSON file is valid (can paste into [jsonlint.com](https://jsonlint.com) to check)
-- [ ] Coefficient names in JSON match variable names in the development model
-- [ ] `variables` field in metadata lists all required predictor column names
-- [ ] Prediction function returns a matrix with named columns
-- [ ] Manual verification confirms predictions match those from the original model object
-- [ ] Access token issued with read-only scope and appropriate expiration
-- [ ] Evaluator has been told which variables to prepare (including any transformations if using Example B approach)
+- [ ] `register_model()` ran without errors and printed a confirmation
+      message
+- [ ] Manual verification confirms predictions match those from the original
+      model object (difference < 1e-4)
+- [ ] Specification file is uploaded to the correct path:
+      `<model_id>/<model_id>_specification.json`
+- [ ] Repository visibility is set to **Private** if necessary
+- [ ] Access token has read-only Contents scope and appropriate expiration
+- [ ] Evaluator has been told:
+  - Your GitHub username (`repo_owner`)
+  - The repository name (`repo_name`)
+  - The model ID (`model_id`)
+  - Which variables their dataset must contain (`variables` field in the
+    model description)
+  - Any transformations they need to apply (if not embedded in preprocessing)

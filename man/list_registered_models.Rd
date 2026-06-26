@@ -17,12 +17,12 @@ A \code{data.frame} with columns:
 \code{\link[=secure_model_validation]{secure_model_validation()}} as \code{model_id}).}
 \item{model_name}{Human-readable model name.}
 \item{developer_id}{Developer's evaluatr identifier.}
-\item{developer_name}{Developer's real name (may be \code{NA} if not
-provided at registration).}
+\item{developer_name}{Developer's name (may be \code{NA} if not provided
+at registration).}
 \item{developer_email}{Contact email for requesting a validation token
-(may be \code{NA} if not provided).}
+(may be \code{NA} if not provided at registration).}
 \item{model_description}{Free-text description of the model (may be
-\code{NA} if not provided).}
+\code{NA} if not provided at registration).}
 }
 }
 \description{
@@ -30,14 +30,27 @@ Queries the evaluatr registry for all publicly listed models. Returns a
 data frame you can use to find models available for validation and to
 identify the developer contact for requesting a validation token.
 
-Only models registered with \code{public_listing = TRUE} (the default) appear
-in the results.
+Only models registered with \code{public_listing = TRUE} (the default in
+\code{\link[=register_model]{register_model()}}) appear in the results.
+}
+\details{
+To validate a model, contact the developer at the listed email address and
+request a time-limited access token. Once you have the token, pass it to
+\code{\link[=secure_model_validation]{secure_model_validation()}} along with the \code{developer_id} as \code{repo_owner},
+the repository name the developer provides as \code{repo_name}, and the
+\code{model_id} from this table.
 }
 \examples{
 \dontrun{
-# List all publicly registered models
+# Browse all publicly registered models
 models <- list_registered_models()
 print(models[, c("model_id", "model_name", "developer_email")])
+
+# Find models by a specific developer
+subset(models, developer_id == "JoieEnsor")
 }
 
+}
+\seealso{
+\code{\link[=secure_model_validation]{secure_model_validation()}}, \code{\link[=register_model]{register_model()}}
 }

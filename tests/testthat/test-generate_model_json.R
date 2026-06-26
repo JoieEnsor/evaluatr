@@ -1,4 +1,4 @@
-# Tests for generate_model_json() — Phase 2 developer utility
+# Tests for register_model() â€” Phase 2 developer utility
 #
 # Tests cover:
 #  1. Logistic from glm object
@@ -6,7 +6,7 @@
 #  3. Multinomial from multinom object
 #  4. Cox from coxph object
 #  5. Weibull from survreg object
-#  6. Round-trip verification (generate → base64 → .predict_secure())
+#  6. Round-trip verification (generate â†’ base64 â†’ .predict_secure())
 #  7. Invalid inputs
 #  8. Output file existence and valid JSON
 #  9. Preprocessing preserved
@@ -27,7 +27,7 @@ mock_register_ok_gj <- function(model_id, developer_id, model_name,
   )
 }
 
-# Helper: run generate_model_json() with registration mocked.
+# Helper: run register_model() with registration mocked.
 with_mocked_gmj <- function(expr) {
   with_mocked_bindings(
     expr,
@@ -37,7 +37,7 @@ with_mocked_gmj <- function(expr) {
 }
 
 # Helper: like with_mocked_gmj but captures the obfuscation_key and salts that
-# generate_model_json() sends to the key service.
+# register_model() sends to the key service.
 # Returns a list: $result, $obfuscation_key, $salt_a, $salt_b.
 with_mocked_gmj_capture <- function(expr) {
   captured_obf_key <- NULL
@@ -66,7 +66,7 @@ with_mocked_gmj_capture <- function(expr) {
 # Helpers
 # ============================================================
 
-# Read and parse a JSON file produced by generate_model_json()
+# Read and parse a JSON file produced by register_model()
 read_json_file <- function(path) {
   fromJSON(readLines(path, warn = FALSE), simplifyVector = FALSE)
 }
@@ -95,7 +95,7 @@ test_that("logistic from glm: JSON structure is valid and coefficients are obfus
   true_coeffs <- coef(fit)
 
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  result <- with_mocked_gmj(register_model(
     model        = fit,
     model_id     = "test_glm_001",
     developer_id = "test_developer",
@@ -110,11 +110,11 @@ test_that("logistic from glm: JSON structure is valid and coefficients are obfus
   expect_equal(result$metadata$model_name, "Test GLM Model")
   expect_equal(result$metadata$outcome_type, "binary")
 
-  # Improvement B: obfuscation_key NOT stored in JSON — held by key service
+  # Improvement B: obfuscation_key NOT stored in JSON â€” held by key service
   expect_true(is.null(result$obfuscation_key),
               label = "obfuscation_key absent from v1.1 JSON (held by key service)")
 
-  # Phase 3b: encrypted format — no plaintext coefficients field
+  # Phase 3b: encrypted format â€” no plaintext coefficients field
   expect_false("coefficients" %in% names(result),
                label = "plaintext coefficients not present in encrypted JSON")
   expect_true("encrypted_coefficients" %in% names(result))
@@ -127,7 +127,7 @@ test_that("logistic from glm: JSON structure is valid and coefficients are obfus
   expect_false("(Intercept)" %in% unlist(result$metadata$variables))
 
   # File was written
-  out_path <- file.path(tmp, "coefficients.json")
+  out_path <- file.path(tmp, "test_glm_001_specification.json")
   expect_true(file.exists(out_path))
 })
 
@@ -141,7 +141,7 @@ test_that("logistic from manual coefficients: JSON structure is valid", {
                    biomarker_score = 0.8, treatment_group = -0.6)
 
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  result <- with_mocked_gmj(register_model(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "test_manual_001",
@@ -184,7 +184,7 @@ test_that("multinomial from multinom: nested coefficient structure", {
   fit <- nnet::multinom(out ~ x1 + x2, data = df, trace = FALSE)
 
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  result <- with_mocked_gmj(register_model(
     model              = fit,
     model_id           = "test_multinom_001",
     developer_id       = "test_developer",
@@ -196,7 +196,7 @@ test_that("multinomial from multinom: nested coefficient structure", {
   expect_equal(result$model_type, "multinomial")
   expect_equal(result$metadata$outcome_type, "multinomial")
 
-  # Phase 3b: encrypted format — plaintext coefficients not present
+  # Phase 3b: encrypted format â€” plaintext coefficients not present
   expect_false("coefficients" %in% names(result))
   expect_true("encrypted_coefficients" %in% names(result))
   expect_equal(result$metadata$encryption, "aes256gcm")
@@ -208,7 +208,7 @@ test_that("multinomial from multinom: nested coefficient structure", {
   expect_false("(Intercept)" %in% vars)
 
   # File exists
-  expect_true(file.exists(file.path(tmp, "coefficients.json")))
+  expect_true(file.exists(file.path(tmp, "test_multinom_001_specification.json")))
 })
 
 
@@ -235,7 +235,7 @@ test_that("cox from coxph: model_parameters preserved", {
     baseline_survival = c(0.85, 0.72, 0.61)
   )
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  result <- with_mocked_gmj(register_model(
     model            = fit,
     model_id         = "test_cox_001",
     developer_id     = "test_developer",
@@ -283,7 +283,7 @@ test_that("weibull from survreg: shape parameter extracted and preserved", {
 
   mp  <- list(timepoints = c(5, 10, 15))
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  result <- with_mocked_gmj(register_model(
     model            = fit,
     model_id         = "test_weibull_001",
     developer_id     = "test_developer",
@@ -326,7 +326,7 @@ test_that("round-trip logistic: JSON decrypts and produces valid predictions", {
                    biomarker_score = 0.8, treatment_group = -0.6)
 
   tmp <- tempdir()
-  with_mocked_gmj_capture(generate_model_json(
+  with_mocked_gmj_capture(register_model(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "roundtrip_logistic",
@@ -346,7 +346,7 @@ test_that("round-trip logistic: JSON decrypts and produces valid predictions", {
     outcome         = rbinom(n, 1, 0.4)
   )
 
-  json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
+  json_str     <- readLines(file.path(tmp, "roundtrip_logistic_specification.json"), warn = FALSE)
   encoded      <- base64_enc(paste(json_str, collapse = "\n"))
   mock_enc_key <- paste0(rep("c", 64), collapse = "")
 
@@ -373,7 +373,7 @@ test_that("round-trip multinomial: JSON decrypts and produces valid predictions"
   )
 
   tmp <- tempdir()
-  with_mocked_gmj_capture(generate_model_json(
+  with_mocked_gmj_capture(register_model(
     coefficients       = real_coeffs,
     model_type         = "multinomial",
     model_id           = "roundtrip_multinom",
@@ -393,7 +393,7 @@ test_that("round-trip multinomial: JSON decrypts and produces valid predictions"
     outcome = sample(c(0, 1, 2), n, replace = TRUE)
   )
 
-  json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
+  json_str     <- readLines(file.path(tmp, "roundtrip_multinom_specification.json"), warn = FALSE)
   encoded      <- base64_enc(paste(json_str, collapse = "\n"))
   mock_enc_key <- paste0(rep("c", 64), collapse = "")
 
@@ -424,7 +424,7 @@ test_that("round-trip Cox: JSON decrypts and produces valid predictions", {
   )
 
   tmp <- tempdir()
-  with_mocked_gmj_capture(generate_model_json(
+  with_mocked_gmj_capture(register_model(
     coefficients     = real_coeffs,
     model_type       = "cox",
     model_id         = "roundtrip_cox",
@@ -444,7 +444,7 @@ test_that("round-trip Cox: JSON decrypts and produces valid predictions", {
     outcome = rbinom(n, 1, 0.5)
   )
 
-  json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
+  json_str     <- readLines(file.path(tmp, "roundtrip_cox_specification.json"), warn = FALSE)
   encoded      <- base64_enc(paste(json_str, collapse = "\n"))
   mock_enc_key <- paste0(rep("c", 64), collapse = "")
 
@@ -475,7 +475,7 @@ test_that("round-trip Weibull AFT: JSON decrypts and produces valid predictions"
   )
 
   tmp <- tempdir()
-  with_mocked_gmj_capture(generate_model_json(
+  with_mocked_gmj_capture(register_model(
     coefficients     = real_coeffs,
     model_type       = "weibull",
     model_id         = "roundtrip_weibull",
@@ -494,7 +494,7 @@ test_that("round-trip Weibull AFT: JSON decrypts and produces valid predictions"
     outcome = rbinom(n, 1, 0.6)
   )
 
-  json_str     <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
+  json_str     <- readLines(file.path(tmp, "roundtrip_weibull_specification.json"), warn = FALSE)
   encoded      <- base64_enc(paste(json_str, collapse = "\n"))
   mock_enc_key <- paste0(rep("c", 64), collapse = "")
 
@@ -521,7 +521,7 @@ test_that("round-trip Weibull AFT: JSON decrypts and produces valid predictions"
 
 test_that("error when model_id is missing", {
   expect_error(
-    generate_model_json(
+    register_model(
       coefficients = c("(Intercept)" = -1.25, age = 0.02),
       model_type   = "logistic",
       model_name   = "Test",
@@ -533,7 +533,7 @@ test_that("error when model_id is missing", {
 
 test_that("error when model_name is missing", {
   expect_error(
-    generate_model_json(
+    register_model(
       coefficients = c("(Intercept)" = -1.25, age = 0.02),
       model_type   = "logistic",
       model_id     = "test",
@@ -546,7 +546,7 @@ test_that("error when model_name is missing", {
 
 test_that("error when both model and coefficients are NULL", {
   expect_error(
-    generate_model_json(
+    register_model(
       model_id     = "test",
       developer_id = "test_developer",
       model_name   = "Test"
@@ -559,7 +559,7 @@ test_that("error when both model and coefficients are provided", {
   set.seed(1)
   fit <- glm(rbinom(30, 1, 0.5) ~ rnorm(30), family = binomial)
   expect_error(
-    generate_model_json(
+    register_model(
       model        = fit,
       coefficients = c(x = 1.0),
       model_id     = "test",
@@ -573,7 +573,7 @@ test_that("error when both model and coefficients are provided", {
 test_that("error for unsupported model class", {
   fit <- lm(rnorm(30) ~ rnorm(30))
   expect_error(
-    generate_model_json(
+    register_model(
       model        = fit,
       model_id     = "test",
       developer_id = "test_developer",
@@ -586,7 +586,7 @@ test_that("error for unsupported model class", {
 test_that("error for non-binomial glm", {
   fit <- glm(rpois(30, 2) ~ rnorm(30), family = poisson)
   expect_error(
-    generate_model_json(
+    register_model(
       model        = fit,
       model_id     = "test",
       developer_id = "test_developer",
@@ -598,7 +598,7 @@ test_that("error for non-binomial glm", {
 
 test_that("error when model_type missing for manual coefficients", {
   expect_error(
-    generate_model_json(
+    register_model(
       coefficients = c("(Intercept)" = -1.0, age = 0.02),
       model_id     = "test",
       developer_id = "test_developer",
@@ -611,7 +611,7 @@ test_that("error when model_type missing for manual coefficients", {
 
 test_that("error when variables missing for manual coefficients", {
   expect_error(
-    generate_model_json(
+    register_model(
       coefficients = c("(Intercept)" = -1.0, age = 0.02),
       model_type   = "logistic",
       model_id     = "test",
@@ -624,7 +624,7 @@ test_that("error when variables missing for manual coefficients", {
 
 test_that("error for Cox without model_parameters", {
   expect_error(
-    generate_model_json(
+    register_model(
       coefficients = c(age = 0.05),
       model_type   = "cox",
       model_id     = "test",
@@ -638,7 +638,7 @@ test_that("error for Cox without model_parameters", {
 
 test_that("error for Cox without baseline_survival", {
   expect_error(
-    generate_model_json(
+    register_model(
       coefficients     = c(age = 0.05),
       model_type       = "cox",
       model_id         = "test",
@@ -653,7 +653,7 @@ test_that("error for Cox without baseline_survival", {
 
 test_that("error for multinomial without reference_category in manual mode", {
   expect_error(
-    generate_model_json(
+    register_model(
       coefficients = list(
         cat_B = c("(Intercept)" = -0.5, x1 = 0.3)
       ),
@@ -669,7 +669,7 @@ test_that("error for multinomial without reference_category in manual mode", {
 
 test_that("error for multinomial with non-list coefficients", {
   expect_error(
-    generate_model_json(
+    register_model(
       coefficients       = c("(Intercept)" = -0.5, x1 = 0.3),
       model_type         = "multinomial",
       model_id           = "test",
@@ -690,7 +690,7 @@ test_that("error for multinomial with non-list coefficients", {
 test_that("output file exists, is valid JSON, and contains all required fields", {
   real_coeffs <- c("(Intercept)" = -1.25, age = 0.02, score = 0.8)
   tmp <- tempdir()
-  with_mocked_gmj(generate_model_json(
+  with_mocked_gmj(register_model(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "file_test_001",
@@ -701,7 +701,7 @@ test_that("output file exists, is valid JSON, and contains all required fields",
     output_dir   = tmp
   ))
 
-  out_path <- file.path(tmp, "coefficients.json")
+  out_path <- file.path(tmp, "file_test_001_specification.json")
   expect_true(file.exists(out_path))
 
   # Parseable JSON
@@ -729,20 +729,19 @@ test_that("output file exists, is valid JSON, and contains all required fields",
   }
 })
 
-test_that("custom output_filename is used", {
+test_that("output filename is always derived from model_id", {
   real_coeffs <- c("(Intercept)" = -1.0, age = 0.02)
   tmp <- tempdir()
-  with_mocked_gmj(generate_model_json(
-    coefficients    = real_coeffs,
-    model_type      = "logistic",
-    model_id        = "custom_fn",
-    developer_id    = "test_developer",
-    model_name      = "Custom Filename Test",
-    variables       = "age",
-    output_dir      = tmp,
-    output_filename = "my_model.json"
+  with_mocked_gmj(register_model(
+    coefficients = real_coeffs,
+    model_type   = "logistic",
+    model_id     = "filename_test",
+    developer_id = "test_developer",
+    model_name   = "Filename Convention Test",
+    variables    = "age",
+    output_dir   = tmp
   ))
-  expect_true(file.exists(file.path(tmp, "my_model.json")))
+  expect_true(file.exists(file.path(tmp, "filename_test_specification.json")))
 })
 
 test_that("output_dir is created if it does not exist", {
@@ -750,7 +749,7 @@ test_that("output_dir is created if it does not exist", {
   new_dir <- file.path(tempdir(), paste0("new_dir_", as.integer(Sys.time())))
   expect_false(dir.exists(new_dir))
 
-  with_mocked_gmj(generate_model_json(
+  with_mocked_gmj(register_model(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "dir_test",
@@ -761,7 +760,7 @@ test_that("output_dir is created if it does not exist", {
   ))
 
   expect_true(dir.exists(new_dir))
-  expect_true(file.exists(file.path(new_dir, "coefficients.json")))
+  expect_true(file.exists(file.path(new_dir, "dir_test_specification.json")))
 })
 
 
@@ -774,7 +773,7 @@ test_that("preprocessing string is written to JSON and round-trips correctly", {
   preprocessing <- "validation_data$sexfemale <- ifelse(validation_data$sex == 'female', 1, 0)"
 
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  result <- with_mocked_gmj(register_model(
     coefficients  = real_coeffs,
     model_type    = "logistic",
     model_id      = "preproc_test",
@@ -789,7 +788,7 @@ test_that("preprocessing string is written to JSON and round-trips correctly", {
   expect_equal(result$preprocessing, preprocessing)
 
   # In file
-  parsed <- fromJSON(readLines(file.path(tmp, "coefficients.json"), warn = FALSE),
+  parsed <- fromJSON(readLines(file.path(tmp, "preproc_test_specification.json"), warn = FALSE),
                      simplifyVector = FALSE)
   expect_equal(parsed$preprocessing, preprocessing)
 })
@@ -799,7 +798,7 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
   preprocessing <- "validation_data$sexfemale <- ifelse(validation_data$sex == 'female', 1, 0)"
 
   tmp <- tempdir()
-  with_mocked_gmj_capture(generate_model_json(
+  with_mocked_gmj_capture(register_model(
     coefficients  = real_coeffs,
     model_type    = "logistic",
     model_id      = "preproc_roundtrip",
@@ -817,9 +816,9 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
     sex     = sample(c("male", "female"), n, replace = TRUE),
     outcome = rbinom(n, 1, 0.4)
   )
-  # Note: 'sexfemale' is NOT in val_df — it must be created by preprocessing
+  # Note: 'sexfemale' is NOT in val_df â€” it must be created by preprocessing
 
-  json_str    <- readLines(file.path(tmp, "coefficients.json"), warn = FALSE)
+  json_str    <- readLines(file.path(tmp, "preproc_roundtrip_specification.json"), warn = FALSE)
   encoded     <- base64_enc(paste(json_str, collapse = "\n"))
 
   # Should not error (preprocessing creates 'sexfemale')
@@ -847,7 +846,7 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
 test_that("Phase 3b: generated JSON has encrypted_coefficients, not plaintext", {
   real_coeffs <- c("(Intercept)" = -1.25, age = 0.02, score = 0.8)
   tmp <- tempdir()
-  result <- with_mocked_gmj(generate_model_json(
+  result <- with_mocked_gmj(register_model(
     coefficients = real_coeffs,
     model_type   = "logistic",
     model_id     = "enc_test_001",
@@ -941,7 +940,7 @@ test_that("Phase 3b: .decrypt_coefficients_in_json() round-trips correctly", {
   expect_false("encrypted_coefficients" %in% names(parsed))
   expect_false("encryption_iv" %in% names(parsed))
   expect_null(parsed$metadata$encryption)
-  # obfuscation_key is NOT injected — held by Worker B
+  # obfuscation_key is NOT injected â€” held by Worker B
   expect_null(parsed$obfuscation_key)
 
   # Coefficient names preserved

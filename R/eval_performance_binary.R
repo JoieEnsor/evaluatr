@@ -2,7 +2,29 @@
 # v0.1.0
 
 # Suppress R CMD check notes for ggplot2 aes() column references
-utils::globalVariables(c("thresholds", "NB", "sNB", "label", "outcome", "prediction"))
+utils::globalVariables(c("thresholds", "NB", "sNB", "label", "y_plot"))
+
+# Compute decision curve net benefit at each threshold (binary outcome).
+# Returns a data frame with columns: thresholds, NB, label.
+.compute_dca <- function(outcomes, predictions,
+                         thresholds = seq(0, 1, by = 0.01)) {
+  n    <- length(outcomes)
+  prev <- mean(outcomes)
+  rows <- lapply(thresholds, function(pt) {
+    if (pt >= 1) return(NULL)
+    tp     <- sum(outcomes == 1 & predictions >= pt)
+    fp     <- sum(outcomes == 0 & predictions >= pt)
+    nb     <- tp / n - (fp / n) * (pt / (1 - pt))
+    nb_all <- prev - (1 - prev) * (pt / (1 - pt))
+    data.frame(
+      thresholds = pt,
+      NB         = c(nb, max(nb_all, 0), 0),
+      label      = c("Model", "Treat all", "Treat none"),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
 
 #' Calculate Performance Metrics from a Validation Result
 #'
@@ -421,30 +443,16 @@ eval_performance <- function(validation_result,
       warning("Calibration plot failed: ", e$message); NULL
     })
 
-    # 2. Decision curve (ggplot built from rmda::decision_curve derived data)
-    # dca_args: thresholds, standardize, policy
+    # 2. Decision curve
+    # dca_args: thresholds, standardize
     plots$decision_curve <- tryCatch({
-      standardize  <- isTRUE(dca_args[["standardize"]])
-      dca_defaults <- list(
-        thresholds           = seq(0, 1, by = 0.01),
-        confidence.intervals = NA,
-        policy               = "opt-in"
-      )
-      dca_call_args <- utils::modifyList(
-        dca_defaults,
-        dca_args[intersect(names(dca_args), c("thresholds", "policy"))]
-      )
-      tmp <- data.frame(outcome = outcomes, prediction = predictions)
-      dca <- do.call(rmda::decision_curve,
-                     c(list(formula = outcome ~ prediction, data = tmp,
-                            fitted.risk = TRUE),
-                       dca_call_args))
-      dd <- dca$derived.data
-      dd$label <- ifelse(dd$model == "All",  "Treat all",
-                  ifelse(dd$model == "None", "Treat none", "Model"))
-      y_var  <- if (standardize) "sNB" else "NB"
-      y_lab  <- if (standardize) "Standardised net benefit" else "Net benefit"
-      ggplot2::ggplot(dd, ggplot2::aes(x = thresholds, y = .data[[y_var]],
+      standardize <- isTRUE(dca_args[["standardize"]])
+      thresholds  <- dca_args[["thresholds"]] %||% seq(0, 1, by = 0.01)
+      dd          <- .compute_dca(outcomes, predictions, thresholds)
+      dd$sNB      <- dd$NB / mean(outcomes)
+      y_lab   <- if (standardize) "Standardised net benefit" else "Net benefit"
+      dd$y_plot <- if (standardize) dd$sNB else dd$NB
+      ggplot2::ggplot(dd, ggplot2::aes(x = thresholds, y = y_plot,
                                        colour = label, linetype = label)) +
         ggplot2::geom_line(linewidth = 0.9, na.rm = TRUE) +
         ggplot2::scale_colour_manual(
@@ -454,8 +462,8 @@ eval_performance <- function(validation_result,
           values = c("Model" = "solid", "Treat all" = "dashed", "Treat none" = "dotted")
         ) +
         ggplot2::coord_cartesian(ylim = c(
-          max(-0.05, min(dd[[y_var]], na.rm = TRUE) - 0.01),
-          max(dd[[y_var]], na.rm = TRUE) + 0.01
+          max(-0.05, min(dd$y_plot, na.rm = TRUE) - 0.01),
+          max(dd$y_plot, na.rm = TRUE) + 0.01
         )) +
         ggplot2::labs(
           x      = "Threshold probability",

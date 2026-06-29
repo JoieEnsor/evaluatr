@@ -70,10 +70,8 @@
 #' @importFrom ggplot2 ggplot aes geom_violin geom_jitter labs theme_classic theme element_text scale_fill_manual
 #' @importFrom ResourceSelection hoslem.test
 #' @importFrom rms rcs
-#' @importFrom rmda decision_curve plot_decision_curve
 #' @importFrom CalibrationCurves val.prob.ci.2
 "_PACKAGE"
 
-# Suppress R CMD check NOTEs for non-standard evaluation in ggplot2 aes() and
-# rmda formula interfaces
+# Suppress R CMD check NOTEs for non-standard evaluation in ggplot2 aes()
 utils::globalVariables(c("outcome", "prediction"))

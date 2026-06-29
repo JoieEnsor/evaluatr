@@ -23,7 +23,6 @@ Imports:
     openssl (>= 2.0.0),
     ggplot2 (>= 3.4.0),
     CalibrationCurves (>= 2.0.0),
-    rmda (>= 1.6),
     rms (>= 6.0),
     ResourceSelection (>= 0.3),
     Rcpp (>= 1.0.0)

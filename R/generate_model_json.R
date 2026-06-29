@@ -1,6 +1,6 @@
-# generate_model_json.R -- Developer utility for creating obfuscated model JSON files
+# register_model.R -- Developer utility for creating obfuscated model JSON files
 #
-# Exports: generate_model_json()
+# Exports: register_model()
 # Internal helpers: .extract_from_glm(), .extract_from_coxph(),
 #                   .extract_from_survreg(), .extract_from_multinom(),
 #                   .validate_json_structure(), .assemble_model_json()
@@ -38,7 +38,7 @@
 # @param model A fitted coxph object.
 # @return Named list with model_type, coefficients, variables, outcome_type.
 # Note: model_parameters (timepoints, baseline_survival) must be supplied
-# by the caller via the generate_model_json() model_parameters argument.
+# by the caller via the register_model() model_parameters argument.
 
 .extract_from_coxph <- function(model) {
   if (!inherits(model, "coxph")) {
@@ -65,7 +65,7 @@
 # @param model A fitted survreg object.
 # @return Named list with model_type, coefficients, variables, outcome_type,
 #   and model_parameters (shape, parameterisation). Caller must supply
-#   timepoints via generate_model_json() model_parameters argument and
+#   timepoints via register_model() model_parameters argument and
 #   those are merged in.
 
 .extract_from_survreg <- function(model) {
@@ -296,18 +296,20 @@
 }
 
 
-# ---- generate_model_json() --------------------------------------------------
+# ---- register_model() -------------------------------------------------------
 
-#' Generate an obfuscated JSON model specification file
+#' Register a model and generate its protected specification file
 #'
 #' @description
 #' Developer-facing utility that accepts a fitted R model object or a manual
-#' coefficient specification and produces a correctly formatted JSON file
-#' ready for upload to a GitHub repository for use with
+#' coefficient specification and produces a correctly formatted, protected JSON
+#' file ready for upload to a GitHub repository for use with
 #' [secure_model_validation()].
 #'
-#' Coefficients are protected so that the values stored in the JSON file
-#' cannot be recovered without the evaluatr package binaries.
+#' The function also registers the model with the evaluatr registry, which
+#' is required before any evaluator can validate the model. Registration
+#' stores the keys needed to protect and later recover coefficient values;
+#' those keys are never written to the JSON file itself.
 #'
 #' @param model A fitted model object. Supported classes: `glm` (binomial
 #'   family), `coxph`, `survreg` (Weibull/exponential), `multinom` (nnet).
@@ -318,9 +320,11 @@
 #' @param model_type Character. Required when `coefficients` is supplied.
 #'   One of `"logistic"`, `"cox"`, `"weibull"`, `"multinomial"`.
 #' @param model_id Character. Unique identifier for this model (required).
-#'   Must match the folder name in the GitHub repository (e.g. `"aki_v1"`).
-#' @param developer_id Character. Your identifier (e.g. GitHub username). Used
-#'   to attribute the model in the evaluatr key service registry (required).
+#'   Must match the folder name in the GitHub repository (e.g. `"dvt_v1"`).
+#'   Choose a name that is meaningful and unlikely to conflict with other
+#'   developers' models.
+#' @param developer_id Character. Your identifier (e.g. GitHub username).
+#'   Used to attribute the model in the evaluatr registry (required).
 #' @param model_name Character. Human-readable name (required).
 #' @param outcome_type Character. One of `"binary"`, `"survival"`,
 #'   `"multinomial"`. Required when `coefficients` is supplied; inferred
@@ -328,85 +332,132 @@
 #' @param variables Character vector of predictor variable names (not including
 #'   `"(Intercept)"`). Required when `coefficients` is supplied; inferred from
 #'   model objects.
-#' @param description Character. Free-text description of the model. Default `""`.
+#' @param description Character. Free-text description of the model. Default
+#'   `""`. Recommended: include the outcome definition, predictor list, and
+#'   the development dataset used.
 #' @param version Character. Version string. Default `"1.0"`.
-#' @param preprocessing Character or NULL. R code string that will be evaluated
-#'   on the evaluator's `validation_data` before prediction (e.g. to create
-#'   dummy variables). Default `NULL`.
-#' @param model_parameters Named list or NULL. Additional model parameters
+#' @param preprocessing Character or `NULL`. R code string that will be
+#'   evaluated on the evaluator's `validation_data` before prediction (e.g.
+#'   to create derived variables or dummy columns). Default `NULL`. The code
+#'   must modify `validation_data` in place; it has access to that object and
+#'   nothing else.
+#' @param model_parameters Named list or `NULL`. Additional parameters
 #'   required for Cox and Weibull models:
 #'   \itemize{
 #'     \item Cox: `list(timepoints = c(...), baseline_survival = c(...))`
 #'     \item Weibull: `list(timepoints = c(...), shape = <value>,
-#'       parameterisation = "aft")` (shape is extracted automatically from
-#'       `survreg` objects but can be overridden here).
+#'       parameterisation = "aft")`. The shape parameter is extracted
+#'       automatically from `survreg` objects but can be overridden here.
 #'   }
-#' @param reference_category Character or NULL. For multinomial models: name of
-#'   the reference category (the category whose coefficients are all zero).
+#' @param reference_category Character or `NULL`. For multinomial models: name
+#'   of the reference category (the category whose coefficients are all zero).
 #'   Required when `model_type = "multinomial"` and `coefficients` is supplied.
 #'   Inferred automatically from `multinom` objects.
-#' @param developer_name Character or NULL. Your real name (e.g. "Jane Smith").
-#'   Stored in the evaluatr model directory so evaluators can identify the model
-#'   maintainer. Optional.
-#' @param developer_email Character or NULL. Contact email address for evaluators
-#'   who wish to request a validation token. Optional but recommended if you want
-#'   your model to be discoverable via [list_registered_models()].
+#' @param developer_name Character or `NULL`. Your name (e.g. `"Jane Smith"`).
+#'   Stored in the evaluatr registry so evaluators can identify the model
+#'   maintainer. Optional but recommended.
+#' @param developer_email Character or `NULL`. Contact email for evaluators
+#'   who wish to request a validation token. Optional but strongly recommended
+#'   if you want your model to be discoverable via [list_registered_models()].
 #' @param public_listing Logical. Whether to list this model in the public
-#'   evaluatr model directory (returned by [list_registered_models()]). Default
-#'   `TRUE`. Set to `FALSE` to keep the model registration private (e.g. while
-#'   a paper is under review).
-#' @param output_dir Character. Directory to write the JSON file. Created if it
-#'   does not exist. Default `"."`.
-#' @param output_filename Character or NULL. Filename for the JSON output.
-#'   Default `"coefficients.json"`.
+#'   evaluatr registry (returned by [list_registered_models()]). Default
+#'   `TRUE`. Set to `FALSE` to keep the registration private while a paper
+#'   is under review, for example.
+#' @param output_dir Character. Directory to write the specification file.
+#'   Created if it does not exist. Default `"."`. The file will be written as
+#'   `{model_id}_specification.json` inside this directory.
 #'
 #' @return The complete JSON structure as an R list (invisibly). The primary
-#'   side effect is writing the JSON file to `{output_dir}/{output_filename}`.
+#'   side effect is writing the JSON file to `file.path(output_dir,
+#'   output_filename)`.
 #'
 #' @details
-#' The generated JSON file contains protected coefficient values and metadata.
-#' At validation time, [secure_model_validation()] reads the file and computes
-#' predictions internally; the raw coefficient values are never exposed as R
-#' objects.
+#' The generated file contains protected coefficient values and model
+#' metadata. At validation time, [secure_model_validation()] reads the file
+#' and computes predictions internally; the raw coefficient values are never
+#' exposed as R objects in the evaluator's session.
+#'
+#' **After running this function**, upload the specification file to your
+#' private GitHub repository at the path
+#' `<model_id>/<model_id>_specification.json`, then issue
+#' a time-limited, fine-grained read-only access token to each evaluator. See
+#' the developer guide vignette (\code{vignette("developer-guide", package =
+#' "evaluatr")}) for a complete walkthrough.
+#'
+#' This function requires a network connection to the evaluatr registry. It
+#' will fail if the registry is unreachable.
 #'
 #' @examples
 #' \dontrun{
-#' # Logistic regression from a fitted glm
-#' model <- glm(AKI ~ creatinine_mean + bun_mean,
-#'              data = mydata, family = binomial)
-#' generate_model_json(
-#'   model      = model,
-#'   model_id   = "aki_v1",
-#'   model_name = "AKI Prediction Model",
-#'   output_dir = "models/aki_v1"
+#' # ---- Example 1: Logistic regression (DVT diagnosis model) ------------------
+#' dvt_path <- system.file("extdata", "dvt_example.csv", package = "evaluatr")
+#' dvt_data <- read.csv(dvt_path)
+#'
+#' # Fit on development studies 1-5
+#' dvt_dev <- dvt_data[dvt_data$study %in% 1:5, ]
+#' dvt_fit <- glm(dvt ~ male + ab_ddimer + calf_diff + vein_distension +
+#'                      malignancy + immobile,
+#'                data = dvt_dev, family = binomial)
+#'
+#' register_model(
+#'   model          = dvt_fit,
+#'   model_id       = "dvt_v1",
+#'   developer_id   = "your-github-username",
+#'   model_name     = "DVT Diagnosis Model v1",
+#'   description    = "Logistic regression for DVT diagnosis, developed in studies 1-5.",
+#'   developer_name  = "Your Name",
+#'   developer_email = "you@institution.ac.uk",
+#'   output_dir     = "dvt_v1"
+#' )
+#' # Upload dvt_v1/dvt_v1_specification.json to your private GitHub repository.
+#'
+#' # ---- Example 2: Cox survival model (breast cancer relapse) ----------------
+#' bc_path <- system.file("extdata", "bc_survival_example.csv",
+#'                        package = "evaluatr")
+#' bc_data <- read.csv(bc_path)
+#' bc_dev  <- bc_data[bc_data$val == 0, ]
+#'
+#' library(survival)
+#' cox_fit <- coxph(Surv(rf, rfi) ~ age + nodes + pr + er + hormon,
+#'                  data = bc_dev, x = TRUE)
+#'
+#' # Baseline survival at 5 and 10 years (months: 60 and 120)
+#' bh <- basehaz(cox_fit, centered = FALSE)
+#' S0_60  <- exp(-bh$hazard[which.min(abs(bh$time - 60))])
+#' S0_120 <- exp(-bh$hazard[which.min(abs(bh$time - 120))])
+#'
+#' register_model(
+#'   model            = cox_fit,
+#'   model_id         = "bc_cox_v1",
+#'   developer_id     = "your-github-username",
+#'   model_name       = "Breast Cancer Relapse-Free Survival Model",
+#'   description      = "Cox PH model for relapse-free survival, development set.",
+#'   model_parameters = list(
+#'     timepoints         = c(60, 120),
+#'     baseline_survival  = c(S0_60, S0_120)
+#'   ),
+#'   developer_name  = "Your Name",
+#'   developer_email = "you@institution.ac.uk",
+#'   output_dir      = "bc_cox_v1"
 #' )
 #'
-#' # Logistic from manual coefficients
-#' generate_model_json(
-#'   coefficients = c("(Intercept)" = -1.25, age = 0.02, score = 0.8),
+#' # ---- Example 3: Manual coefficients (logistic) ----------------------------
+#' register_model(
+#'   coefficients = c("(Intercept)" = -3.2, ab_ddimer = 1.8,
+#'                    calf_diff = 1.1, vein_distension = 0.9),
 #'   model_type   = "logistic",
-#'   model_id     = "manual_v1",
-#'   model_name   = "Manual Model",
+#'   model_id     = "dvt_manual_v1",
+#'   developer_id = "your-github-username",
+#'   model_name   = "DVT Manual Coefficients",
 #'   outcome_type = "binary",
-#'   variables    = c("age", "score"),
-#'   output_dir   = "models/manual_v1"
-#' )
-#'
-#' # Multinomial with preprocessing
-#' model <- nnet::multinom(outcome ~ age + sex, data = mydata)
-#' generate_model_json(
-#'   model              = model,
-#'   model_id           = "outcome_v1",
-#'   model_name         = "Outcome Model",
-#'   reference_category = "discharged",
-#'   preprocessing      = "validation_data$sexfemale <- ifelse(validation_data$sex == 'female', 1, 0)",
-#'   output_dir         = "models/outcome_v1"
+#'   variables    = c("ab_ddimer", "calf_diff", "vein_distension"),
+#'   output_dir   = "dvt_manual_v1"
 #' )
 #' }
 #'
 #' @importFrom stats coef
 #' @export
-generate_model_json <- function(
+register_model <- function(
     model              = NULL,
     coefficients       = NULL,
     model_type         = NULL,
@@ -423,8 +474,7 @@ generate_model_json <- function(
     developer_name     = NULL,
     developer_email    = NULL,
     public_listing     = TRUE,
-    output_dir         = ".",
-    output_filename    = NULL
+    output_dir         = "."
 ) {
 
   # ---- Input validation -------------------------------------------------------
@@ -631,7 +681,7 @@ generate_model_json <- function(
   .validate_json_structure(json_list)
 
   # ---- Write to file ----------------------------------------------------------
-  filename <- output_filename %||% "coefficients.json"
+  filename <- paste0(model_id, "_specification.json")
   if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
   }

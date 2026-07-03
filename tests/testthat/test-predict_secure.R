@@ -44,9 +44,9 @@ make_logistic_json_with_by <- make_logistic_json  # same structure
 
 make_cox_json <- function(obfuscated = FALSE, key = NULL,
                           salt_a = NULL, salt_b = NULL) {
-  # True coefficients: (Intercept) = 0, age = 0.05, bmi = 0.03
+  # True coefficients: age = 0.05, bmi = 0.03 (Cox has no intercept)
   # Baseline survival at t=1, t=2, t=5
-  real_coeffs <- c("(Intercept)" = 0.0, "age" = 0.05, "bmi" = 0.03)
+  real_coeffs <- c("age" = 0.05, "bmi" = 0.03)
 
   if (obfuscated && !is.null(key) && !is.null(salt_a) && !is.null(salt_b)) {
     stored_coeffs <- evaluatr:::.obfuscate_coefficients(
@@ -442,9 +442,8 @@ test_that("Cox PH predictions match manual calculation (non-obfuscated)", {
 
   result <- evaluatr:::.predict_secure(enc, df, "outcome", model_id = "test_cox")
 
-  # Manual: LP = 0 + 0.05*age + 0.03*bmi (intercept=0 adds 0)
-  # Note: design matrix has intercept column, so LP = 0*1 + 0.05*age + 0.03*bmi
-  lp   <- 0.0 * 1 + 0.05 * df$age + 0.03 * df$bmi
+  # Manual: LP = 0.05*age + 0.03*bmi (no intercept column for Cox)
+  lp   <- 0.05 * df$age + 0.03 * df$bmi
   s0   <- c(0.95, 0.90, 0.80)
   # S(t) = S0(t)^exp(LP)
   exp_lp <- exp(lp)

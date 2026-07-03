@@ -4,3 +4,6 @@
 ^Meta$
 ^\.github$
 ^\.wrangler$
+^additional_examples$
+^generated_test_models$
+^_scratch$

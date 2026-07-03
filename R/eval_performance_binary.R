@@ -18,7 +18,7 @@ utils::globalVariables(c("thresholds", "NB", "sNB", "label", "y_plot"))
     nb_all <- prev - (1 - prev) * (pt / (1 - pt))
     data.frame(
       thresholds = pt,
-      NB         = c(nb, max(nb_all, 0), 0),
+      NB         = c(nb, nb_all, 0),
       label      = c("Model", "Treat all", "Treat none"),
       stringsAsFactors = FALSE
     )

@@ -56,8 +56,11 @@ Pass the token directly into the function call as shown in the examples below.
 
 ## Example 1: Basic whole-dataset evaluation
 
-This example uses the DVT diagnosis dataset included with the package. It
-illustrates the complete evaluatr workflow for a binary outcome model.
+This example uses the DVT diagnosis dataset included with the package,
+validated against a logistic regression model hosted on the public evaluatr
+demo repository. It illustrates the complete evaluatr workflow for a binary
+outcome model, and you can run it yourself exactly as written — no developer
+contact required.
 
 ```{r}
 library(evaluatr)
@@ -70,13 +73,14 @@ dvt_data <- read.csv(dvt_path)
 # (studies 1-5 were used for model development)
 dvt_val <- dvt_data[dvt_data$study %in% c(6, 7), ]
 
-# Run secure validation
-# Replace the values below with those provided by the model developer
+# Run secure validation against the public evaluatr demo model.
+# The token below is a read-only shared PAT for demonstration purposes only.
+# In real use, the model developer provides you with a private-repo token.
 result <- secure_model_validation(
-  repo_owner      = "developer-username",
-  repo_name       = "my-models",
-  model_id        = "dvt_v1",
-  github_token    = "token_provided_by_developer",
+  repo_owner      = "JoieEnsor",
+  repo_name       = "evaluatr-demo-models",
+  model_id        = "dvt_logistic_v1",
+  github_token    = "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",
   validation_data = dvt_val,
   outcome         = "dvt"
 )
@@ -220,6 +224,27 @@ result_autoprepro <- secure_model_validation(
 
 The two approaches produce identical predictions; the difference is purely
 in who applies the transformation.
+
+---
+
+## More examples: other outcome types
+
+The examples above focus on binary outcomes and general workflow concepts.
+The public evaluatr demo repository also hosts models covering the other
+outcome types evaluatr supports. Runnable scripts for each are included with
+the package under `system.file("extdata", package = "evaluatr")`:
+
+| Script | Model type | Outcome |
+|--------|-----------|---------|
+| `example_01_dvt_logistic.R` | Logistic regression | Binary (DVT diagnosis) |
+| `example_02_bc_cox.R` | Cox proportional hazards | Survival (breast cancer relapse) |
+| `example_03_bc_weibull.R` | Weibull AFT | Survival (breast cancer relapse) |
+| `example_04_adnex_multinomial.R` | Multinomial logistic regression | 5-category (ADNEX ovarian mass classification) |
+
+Each script uses the same public demo repository and read-only token as
+Example 1 above, so they can be run as-is. The survival and multinomial
+scripts also include independent manual verification of the predictions
+against a locally-fit reference model.
 
 ---
 

@@ -18,9 +18,11 @@ register_model(
   preprocessing = NULL,
   model_parameters = NULL,
   reference_category = NULL,
+  registrant_relationship = NULL,
   developer_name = NULL,
   developer_email = NULL,
   public_listing = TRUE,
+  rate_limit_exempt = FALSE,
   output_dir = "."
 )
 }
@@ -79,6 +81,13 @@ of the reference category (the category whose coefficients are all zero).
 Required when \code{model_type = "multinomial"} and \code{coefficients} is supplied.
 Inferred automatically from \code{multinom} objects.}
 
+\item{registrant_relationship}{Character. Required. Your relationship to the
+model being registered. Must be one of \code{"original_developer"} (you created
+the model), \code{"authorised_proxy"} (you are registering on behalf of the
+original developer with their permission), or \code{"independent"} (you are
+registering a model developed by others). This is stored in the evaluatr
+registry and used for endorsement decisions.}
+
 \item{developer_name}{Character or \code{NULL}. Your name (e.g. \code{"Jane Smith"}).
 Stored in the evaluatr registry so evaluators can identify the model
 maintainer. Optional but recommended.}
@@ -91,6 +100,11 @@ if you want your model to be discoverable via \code{\link[=list_registered_model
 evaluatr registry (returned by \code{\link[=list_registered_models]{list_registered_models()}}). Default
 \code{TRUE}. Set to \code{FALSE} to keep the registration private while a paper
 is under review, for example.}
+
+\item{rate_limit_exempt}{Logical. Whether this model is exempt from the
+key-fetch rate limit. Default \code{FALSE}. Set to \code{TRUE} only for demo/
+teaching models intended for open repeated use.
+Also useful for fully open access models e.g., specification already published open access.}
 
 \item{output_dir}{Character. Directory to write the specification file.
 Created if it does not exist. Default \code{"."}. The file will be written as

@@ -15,3 +15,12 @@ src/*.a
 
 # Test output
 tests/testthat/Rplots.pdf
+/doc/
+/Meta/
+
+# Scratch files (manuscript, presentations, notes)
+/_scratch/
+
+# Vignette build artefacts
+vignettes/*.log
+vignettes/*.R

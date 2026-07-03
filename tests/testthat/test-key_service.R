@@ -37,12 +37,13 @@ test_that("successful registration returns 64-char hex encryption_key", {
 
   result <- with_mocked_bindings(
     .register_model_with_key_service(
-      model_id        = "test_model_001",
-      developer_id    = "JoieEnsor",
-      model_name      = "Test Model",
-      obfuscation_key = paste0(rep("a", 32), collapse = ""),
-      salt_a          = dummy_salt_a,
-      salt_b          = dummy_salt_b
+      model_id                = "test_model_001",
+      developer_id            = "JoieEnsor",
+      model_name              = "Test Model",
+      obfuscation_key         = paste0(rep("a", 32), collapse = ""),
+      salt_a                  = dummy_salt_a,
+      salt_b                  = dummy_salt_b,
+      registrant_relationship = "original_developer"
     ),
     curl_fetch_memory = function(url, handle) mock_response,
     .package = "curl"
@@ -63,12 +64,13 @@ test_that("duplicate model_id (409) stops with informative error", {
   expect_error(
     with_mocked_bindings(
       .register_model_with_key_service(
-        model_id        = "test_model_001",
-        developer_id    = "JoieEnsor",
-        model_name      = "Test Model",
-        obfuscation_key = paste0(rep("a", 32), collapse = ""),
-        salt_a          = dummy_salt_a,
-        salt_b          = dummy_salt_b
+        model_id                = "test_model_001",
+        developer_id            = "JoieEnsor",
+        model_name              = "Test Model",
+        obfuscation_key         = paste0(rep("a", 32), collapse = ""),
+        salt_a                  = dummy_salt_a,
+        salt_b                  = dummy_salt_b,
+        registrant_relationship = "independent"
       ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
@@ -83,12 +85,13 @@ test_that("non-200 non-409 response from /register stops with error", {
   expect_error(
     with_mocked_bindings(
       .register_model_with_key_service(
-        model_id        = "test_model_001",
-        developer_id    = "JoieEnsor",
-        model_name      = "Test Model",
-        obfuscation_key = paste0(rep("a", 32), collapse = ""),
-        salt_a          = dummy_salt_a,
-        salt_b          = dummy_salt_b
+        model_id                = "test_model_001",
+        developer_id            = "JoieEnsor",
+        model_name              = "Test Model",
+        obfuscation_key         = paste0(rep("a", 32), collapse = ""),
+        salt_a                  = dummy_salt_a,
+        salt_b                  = dummy_salt_b,
+        registrant_relationship = "independent"
       ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
@@ -101,12 +104,13 @@ test_that("unreachable service stops with informative error", {
   expect_error(
     with_mocked_bindings(
       .register_model_with_key_service(
-        model_id        = "test_model_001",
-        developer_id    = "JoieEnsor",
-        model_name      = "Test Model",
-        obfuscation_key = paste0(rep("a", 32), collapse = ""),
-        salt_a          = dummy_salt_a,
-        salt_b          = dummy_salt_b
+        model_id                = "test_model_001",
+        developer_id            = "JoieEnsor",
+        model_name              = "Test Model",
+        obfuscation_key         = paste0(rep("a", 32), collapse = ""),
+        salt_a                  = dummy_salt_a,
+        salt_b                  = dummy_salt_b,
+        registrant_relationship = "independent"
       ),
       curl_fetch_memory = function(url, handle) stop("Could not connect"),
       .package = "curl"
@@ -124,12 +128,13 @@ test_that("registration fails with short key (< 64 chars) from service", {
   expect_error(
     with_mocked_bindings(
       .register_model_with_key_service(
-        model_id        = "test_model_001",
-        developer_id    = "JoieEnsor",
-        model_name      = "Test Model",
-        obfuscation_key = paste0(rep("a", 32), collapse = ""),
-        salt_a          = dummy_salt_a,
-        salt_b          = dummy_salt_b
+        model_id                = "test_model_001",
+        developer_id            = "JoieEnsor",
+        model_name              = "Test Model",
+        obfuscation_key         = paste0(rep("a", 32), collapse = ""),
+        salt_a                  = dummy_salt_a,
+        salt_b                  = dummy_salt_b,
+        registrant_relationship = "independent"
       ),
       curl_fetch_memory = function(url, handle) mock_response,
       .package = "curl"
@@ -399,14 +404,15 @@ test_that("register_model() succeeds with registration mocked", {
 
   result <- with_mocked_bindings(
     register_model(
-      coefficients = c("(Intercept)" = -1.25, age = 0.02, score = 0.8),
-      model_type   = "logistic",
-      model_id     = "test_json_001",
-      developer_id = "JoieEnsor",
-      model_name   = "Test JSON Model",
-      outcome_type = "binary",
-      variables    = c("age", "score"),
-      output_dir   = tmp_dir
+      coefficients            = c("(Intercept)" = -1.25, age = 0.02, score = 0.8),
+      model_type              = "logistic",
+      model_id                = "test_json_001",
+      developer_id            = "JoieEnsor",
+      model_name              = "Test JSON Model",
+      outcome_type            = "binary",
+      variables               = c("age", "score"),
+      registrant_relationship = "original_developer",
+      output_dir              = tmp_dir
     ),
     .register_model_with_key_service = mock_register_ok,
     .package = "evaluatr"
@@ -425,14 +431,15 @@ test_that("register_model() propagates registration error", {
   expect_error(
     with_mocked_bindings(
       register_model(
-        coefficients = c("(Intercept)" = -1.25, age = 0.02),
-        model_type   = "logistic",
-        model_id     = "duplicate_model",
-        developer_id = "JoieEnsor",
-        model_name   = "Duplicate Model",
-        outcome_type = "binary",
-        variables    = c("age"),
-        output_dir   = tmp_dir
+        coefficients            = c("(Intercept)" = -1.25, age = 0.02),
+        model_type              = "logistic",
+        model_id                = "duplicate_model",
+        developer_id            = "JoieEnsor",
+        model_name              = "Duplicate Model",
+        outcome_type            = "binary",
+        variables               = c("age"),
+        registrant_relationship = "independent",
+        output_dir              = tmp_dir
       ),
       .register_model_with_key_service = function(model_id, developer_id,
                                                    model_name, obfuscation_key,
@@ -492,16 +499,17 @@ test_that("register_model() rejects empty developer_id string", {
 test_that("registration forwards optional registry fields", {
   result <- with_mocked_bindings(
     .register_model_with_key_service(
-      model_id          = "test_registry_001",
-      developer_id      = "JoeBloggs",
-      model_name        = "Registry Test Model",
-      obfuscation_key   = paste0(rep("b", 32), collapse = ""),
-      salt_a            = dummy_salt_a,
-      salt_b            = dummy_salt_b,
-      developer_name    = "Joe Bloggs",
-      developer_email   = "j.bloggs@example.ac.uk",
-      model_description = "A model for testing the registry",
-      public_listing    = TRUE
+      model_id                = "test_registry_001",
+      developer_id            = "JoeBloggs",
+      model_name              = "Registry Test Model",
+      obfuscation_key         = paste0(rep("b", 32), collapse = ""),
+      salt_a                  = dummy_salt_a,
+      salt_b                  = dummy_salt_b,
+      registrant_relationship = "original_developer",
+      developer_name          = "Joe Bloggs",
+      developer_email         = "j.bloggs@example.ac.uk",
+      model_description       = "A model for testing the registry",
+      public_listing          = TRUE
     ),
     curl_fetch_memory = function(url, handle) {
       make_curl_response(200, list(
@@ -518,13 +526,14 @@ test_that("registration forwards optional registry fields", {
 test_that("registration with public_listing = FALSE is forwarded", {
   result <- with_mocked_bindings(
     .register_model_with_key_service(
-      model_id        = "private_model_001",
-      developer_id    = "JoeBloggs",
-      model_name      = "Private Model",
-      obfuscation_key = paste0(rep("c", 32), collapse = ""),
-      salt_a          = dummy_salt_a,
-      salt_b          = dummy_salt_b,
-      public_listing  = FALSE
+      model_id                = "private_model_001",
+      developer_id            = "JoeBloggs",
+      model_name              = "Private Model",
+      obfuscation_key         = paste0(rep("c", 32), collapse = ""),
+      salt_a                  = dummy_salt_a,
+      salt_b                  = dummy_salt_b,
+      registrant_relationship = "independent",
+      public_listing          = FALSE
     ),
     curl_fetch_memory = function(url, handle) {
       make_curl_response(200, list(
@@ -545,27 +554,31 @@ test_that("register_model() forwards registry fields to key service", {
 
   result <- with_mocked_bindings(
     register_model(
-      coefficients      = c("(Intercept)" = -1.25, age = 0.02),
-      model_type        = "logistic",
-      model_id          = "registry_test_json",
-      developer_id      = "JoeBloggs",
-      model_name        = "Registry JSON Model",
-      outcome_type      = "binary",
-      variables         = c("age"),
-      developer_name    = "Joe Bloggs",
-      developer_email   = "j.bloggs@example.ac.uk",
-      public_listing    = TRUE,
-      output_dir        = tmp_dir
+      coefficients            = c("(Intercept)" = -1.25, age = 0.02),
+      model_type              = "logistic",
+      model_id                = "registry_test_json",
+      developer_id            = "JoeBloggs",
+      model_name              = "Registry JSON Model",
+      outcome_type            = "binary",
+      variables               = c("age"),
+      registrant_relationship = "original_developer",
+      developer_name          = "Joe Bloggs",
+      developer_email         = "j.bloggs@example.ac.uk",
+      public_listing          = TRUE,
+      output_dir              = tmp_dir
     ),
     .register_model_with_key_service = function(model_id, developer_id,
                                                 model_name, obfuscation_key,
                                                 salt_a, salt_b,
+                                                registrant_relationship,
                                                 developer_name = NULL,
                                                 developer_email = NULL,
                                                 model_description = NULL,
-                                                public_listing = TRUE) {
+                                                public_listing = TRUE,
+                                                rate_limit_exempt = FALSE) {
       expect_equal(developer_name, "Joe Bloggs")
       expect_equal(developer_email, "j.bloggs@example.ac.uk")
+      expect_equal(registrant_relationship, "original_developer")
       expect_true(isTRUE(public_listing))
       list(encryption_key = dummy_key, registered_at = "2026-04-10T09:00:00Z")
     },
@@ -585,22 +598,26 @@ make_public_models_response <- function() {
     n = 2L,
     models = list(
       list(
-        model_id          = "aki_v1",
-        model_name        = "AKI Prediction Model",
-        developer_id      = "JoeBloggs",
-        developer_name    = "Joe Bloggs",
-        developer_email   = "j.bloggs@example.ac.uk",
-        model_description = "Predicts AKI from routine bloods",
-        registered_at     = "2026-04-01T10:00:00Z"
+        model_id                = "aki_v1",
+        model_name              = "AKI Prediction Model",
+        developer_id            = "JoeBloggs",
+        developer_name          = "Joe Bloggs",
+        developer_email         = "j.bloggs@example.ac.uk",
+        model_description       = "Predicts AKI from routine bloods",
+        registered_at           = "2026-04-01T10:00:00Z",
+        registrant_relationship = "original_developer",
+        endorsed                = 1L
       ),
       list(
-        model_id          = "adnex_v1",
-        model_name        = "ADNEX Model",
-        developer_id      = "KULeuven",
-        developer_name    = NULL,
-        developer_email   = NULL,
-        model_description = "Ovarian tumour classification",
-        registered_at     = "2026-04-02T11:00:00Z"
+        model_id                = "adnex_v1",
+        model_name              = "ADNEX Model",
+        developer_id            = "KULeuven",
+        developer_name          = NULL,
+        developer_email         = NULL,
+        model_description       = "Ovarian tumour classification",
+        registered_at           = "2026-04-02T11:00:00Z",
+        registrant_relationship = "independent",
+        endorsed                = 1L
       )
     )
   )
@@ -619,11 +636,13 @@ test_that("list_registered_models() returns a data.frame with correct columns", 
   expect_equal(nrow(result), 2L)
   expected_cols <- c("model_id", "model_name", "developer_id",
                      "developer_name", "developer_email",
-                     "model_description")
+                     "model_description", "registrant_relationship",
+                     "endorsed")
   expect_true(all(expected_cols %in% names(result)))
   expect_false("registered_at" %in% names(result))
   expect_equal(result$model_id[1], "aki_v1")
   expect_equal(result$developer_email[1], "j.bloggs@example.ac.uk")
+  expect_equal(result$registrant_relationship[1], "original_developer")
 })
 
 test_that("list_registered_models() returns empty data.frame when no models", {
@@ -676,4 +695,187 @@ test_that("list_registered_models() with as_data_frame = FALSE returns raw list"
   expect_type(result, "list")
   expect_equal(result$n, 2L)
   expect_type(result$models, "list")
+})
+
+# ============================================================
+# New: registrant_relationship validation
+# ============================================================
+
+test_that("register_model() rejects invalid registrant_relationship", {
+  tmp_dir <- tempfile()
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE))
+
+  expect_error(
+    register_model(
+      coefficients            = c("(Intercept)" = -1.25, age = 0.02),
+      model_type              = "logistic",
+      model_id                = "test_rel_invalid",
+      developer_id            = "JoieEnsor",
+      model_name              = "Test Model",
+      outcome_type            = "binary",
+      variables               = c("age"),
+      registrant_relationship = "unknown_role",
+      output_dir              = tmp_dir
+    ),
+    "registrant_relationship"
+  )
+})
+
+test_that("register_model() rejects NULL registrant_relationship", {
+  tmp_dir <- tempfile()
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE))
+
+  expect_error(
+    register_model(
+      coefficients            = c("(Intercept)" = -1.25, age = 0.02),
+      model_type              = "logistic",
+      model_id                = "test_rel_null",
+      developer_id            = "JoieEnsor",
+      model_name              = "Test Model",
+      outcome_type            = "binary",
+      variables               = c("age"),
+      registrant_relationship = NULL,
+      output_dir              = tmp_dir
+    ),
+    "registrant_relationship"
+  )
+})
+
+test_that(".register_model_with_key_service() rejects invalid registrant_relationship", {
+  expect_error(
+    .register_model_with_key_service(
+      model_id                = "test_model_001",
+      developer_id            = "JoieEnsor",
+      model_name              = "Test Model",
+      obfuscation_key         = paste0(rep("a", 32), collapse = ""),
+      salt_a                  = dummy_salt_a,
+      salt_b                  = dummy_salt_b,
+      registrant_relationship = "not_valid"
+    ),
+    "registrant_relationship"
+  )
+})
+
+# ============================================================
+# New: endorsement message from .fetch_decryption_key()
+# ============================================================
+
+test_that(".fetch_decryption_key() emits message for unendorsed model", {
+  mock_response <- make_curl_response(200, list(
+    encryption_key = dummy_key,
+    endorsed       = FALSE
+  ))
+
+  expect_message(
+    with_mocked_bindings(
+      .fetch_decryption_key(
+        model_id     = "unendorsed_model",
+        n            = 100L,
+        github_token = "fake_token",
+        repo_owner   = "JoieEnsor",
+        repo_name    = "evaluatr_testing_environment"
+      ),
+      curl_fetch_memory = function(url, handle) mock_response,
+      .package = "curl"
+    ),
+    "not been endorsed"
+  )
+})
+
+test_that(".fetch_decryption_key() emits no message for endorsed model", {
+  mock_response <- make_curl_response(200, list(
+    encryption_key = dummy_key
+    # endorsed field absent — treated as endorsed (no flag)
+  ))
+
+  expect_no_message(
+    with_mocked_bindings(
+      .fetch_decryption_key(
+        model_id     = "endorsed_model",
+        n            = 100L,
+        github_token = "fake_token",
+        repo_owner   = "JoieEnsor",
+        repo_name    = "evaluatr_testing_environment"
+      ),
+      curl_fetch_memory = function(url, handle) mock_response,
+      .package = "curl"
+    )
+  )
+})
+
+# ============================================================
+# New: list_registered_models() include_unendorsed param
+# ============================================================
+
+test_that("list_registered_models() passes include_unendorsed=true in URL", {
+  captured_url <- NULL
+  mock_response <- make_curl_response(200, make_public_models_response())
+
+  with_mocked_bindings(
+    list_registered_models(include_unendorsed = TRUE),
+    curl_fetch_memory = function(url, handle) {
+      captured_url <<- url
+      mock_response
+    },
+    .package = "curl"
+  )
+
+  expect_true(grepl("include_unendorsed=true", captured_url))
+})
+
+test_that("list_registered_models() default URL has no include_unendorsed param", {
+  captured_url <- NULL
+  mock_response <- make_curl_response(200, make_public_models_response())
+
+  with_mocked_bindings(
+    list_registered_models(),
+    curl_fetch_memory = function(url, handle) {
+      captured_url <<- url
+      mock_response
+    },
+    .package = "curl"
+  )
+
+  expect_false(grepl("include_unendorsed", captured_url))
+})
+
+# ============================================================
+# New: register_model() rate_limit_exempt forwarded
+# ============================================================
+
+test_that("register_model() forwards rate_limit_exempt = TRUE", {
+  tmp_dir <- tempfile()
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE))
+
+  captured_exempt <- NULL
+
+  with_mocked_bindings(
+    register_model(
+      coefficients            = c("(Intercept)" = -1.25, age = 0.02),
+      model_type              = "logistic",
+      model_id                = "demo_model_exempt",
+      developer_id            = "JoieEnsor",
+      model_name              = "Demo Model",
+      outcome_type            = "binary",
+      variables               = c("age"),
+      registrant_relationship = "original_developer",
+      rate_limit_exempt       = TRUE,
+      output_dir              = tmp_dir
+    ),
+    .register_model_with_key_service = function(model_id, developer_id,
+                                                model_name, obfuscation_key,
+                                                salt_a, salt_b,
+                                                registrant_relationship,
+                                                ...,
+                                                rate_limit_exempt = FALSE) {
+      captured_exempt <<- rate_limit_exempt
+      list(encryption_key = dummy_key, registered_at = "2026-06-29T09:00:00Z")
+    },
+    .package = "evaluatr"
+  )
+
+  expect_true(isTRUE(captured_exempt))
 })

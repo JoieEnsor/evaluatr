@@ -4,11 +4,15 @@
 \alias{list_registered_models}
 \title{List models registered in the evaluatr public directory}
 \usage{
-list_registered_models(as_data_frame = TRUE)
+list_registered_models(as_data_frame = TRUE, include_unendorsed = FALSE)
 }
 \arguments{
 \item{as_data_frame}{Logical. If \code{TRUE} (default) return a \code{data.frame}.
 If \code{FALSE} return the raw parsed list from the JSON response.}
+
+\item{include_unendorsed}{Logical. If \code{FALSE} (default) only return models
+endorsed by the evaluatr registry. Set to \code{TRUE} to include all publicly
+listed models regardless of endorsement status.}
 }
 \value{
 A \code{data.frame} with columns:
@@ -23,6 +27,11 @@ at registration).}
 (may be \code{NA} if not provided at registration).}
 \item{model_description}{Free-text description of the model (may be
 \code{NA} if not provided at registration).}
+\item{registrant_relationship}{Registrant's declared relationship to
+the model: \code{"original_developer"}, \code{"authorised_proxy"}, or
+\code{"independent"}.}
+\item{endorsed}{Integer flag: \code{1} if the model has been endorsed by
+the evaluatr registry, \code{0} otherwise.}
 }
 }
 \description{
@@ -31,7 +40,8 @@ data frame you can use to find models available for validation and to
 identify the developer contact for requesting a validation token.
 
 Only models registered with \code{public_listing = TRUE} (the default in
-\code{\link[=register_model]{register_model()}}) appear in the results.
+\code{\link[=register_model]{register_model()}}) appear in the results. By default only endorsed models
+are returned; set \code{include_unendorsed = TRUE} to see all registered models.
 }
 \details{
 To validate a model, contact the developer at the listed email address and
@@ -42,9 +52,12 @@ the repository name the developer provides as \code{repo_name}, and the
 }
 \examples{
 \dontrun{
-# Browse all publicly registered models
+# Browse endorsed models (default)
 models <- list_registered_models()
 print(models[, c("model_id", "model_name", "developer_email")])
+
+# Include unendorsed models
+all_models <- list_registered_models(include_unendorsed = TRUE)
 
 # Find models by a specific developer
 subset(models, developer_id == "JoieEnsor")

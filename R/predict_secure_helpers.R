@@ -180,8 +180,10 @@
          paste(missing_vars, collapse = ", "))
   }
 
-  # Step 4: Build design matrix (intercept always prepended; C++ aligns by position)
-  X <- .build_design_matrix(validation_data, variable_names, has_intercept = TRUE)
+  # Step 4: Build design matrix. Cox has no intercept term; all other model
+  # types need an intercept column at position 0 for C++ alignment.
+  X <- .build_design_matrix(validation_data, variable_names,
+                             has_intercept = (model_type != "cox"))
 
   # Step 5: Prepare vectors
   outcome_vec <- as.numeric(validation_data[[outcome]])

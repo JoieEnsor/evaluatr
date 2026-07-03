@@ -359,10 +359,20 @@
 #' @param developer_email Character or `NULL`. Contact email for evaluators
 #'   who wish to request a validation token. Optional but strongly recommended
 #'   if you want your model to be discoverable via [list_registered_models()].
+#' @param registrant_relationship Character. Required. Your relationship to the
+#'   model being registered. Must be one of `"original_developer"` (you created
+#'   the model), `"authorised_proxy"` (you are registering on behalf of the
+#'   original developer with their permission), or `"independent"` (you are
+#'   registering a model developed by others). This is stored in the evaluatr
+#'   registry and used for endorsement decisions.
 #' @param public_listing Logical. Whether to list this model in the public
 #'   evaluatr registry (returned by [list_registered_models()]). Default
 #'   `TRUE`. Set to `FALSE` to keep the registration private while a paper
 #'   is under review, for example.
+#' @param rate_limit_exempt Logical. Whether this model is exempt from the
+#'   key-fetch rate limit. Default `FALSE`. Set to `TRUE` only for demo/
+#'   teaching models intended for open repeated use.
+#'   Also useful for fully open access models e.g., specification already published open access.
 #' @param output_dir Character. Directory to write the specification file.
 #'   Created if it does not exist. Default `"."`. The file will be written as
 #'   `{model_id}_specification.json` inside this directory.
@@ -458,23 +468,25 @@
 #' @importFrom stats coef
 #' @export
 register_model <- function(
-    model              = NULL,
-    coefficients       = NULL,
-    model_type         = NULL,
-    model_id           = NULL,
-    developer_id       = NULL,
-    model_name         = NULL,
-    outcome_type       = NULL,
-    variables          = NULL,
-    description        = "",
-    version            = "1.0",
-    preprocessing      = NULL,
-    model_parameters   = NULL,
-    reference_category = NULL,
-    developer_name     = NULL,
-    developer_email    = NULL,
-    public_listing     = TRUE,
-    output_dir         = "."
+    model                   = NULL,
+    coefficients            = NULL,
+    model_type              = NULL,
+    model_id                = NULL,
+    developer_id            = NULL,
+    model_name              = NULL,
+    outcome_type            = NULL,
+    variables               = NULL,
+    description             = "",
+    version                 = "1.0",
+    preprocessing           = NULL,
+    model_parameters        = NULL,
+    reference_category      = NULL,
+    registrant_relationship = NULL,
+    developer_name          = NULL,
+    developer_email         = NULL,
+    public_listing          = TRUE,
+    rate_limit_exempt       = FALSE,
+    output_dir              = "."
 ) {
 
   # ---- Input validation -------------------------------------------------------
@@ -488,6 +500,13 @@ register_model <- function(
   if (is.null(model_name) || !nzchar(trimws(model_name))) {
     stop("model_name is required and must be a non-empty string")
   }
+  valid_relationships <- c("original_developer", "authorised_proxy", "independent")
+  if (is.null(registrant_relationship) ||
+      !trimws(registrant_relationship) %in% valid_relationships) {
+    stop("registrant_relationship is required. Must be one of: ",
+         paste(valid_relationships, collapse = ", "), call. = FALSE)
+  }
+  registrant_relationship <- trimws(registrant_relationship)
   if (!is.null(model) && !is.null(coefficients)) {
     stop("Provide either 'model' or 'coefficients', not both")
   }
@@ -620,16 +639,18 @@ register_model <- function(
   # encryption key (R side) and Worker B returns the obfuscation key + salts
   # (C++ side, Phase 2).
   registration <- .register_model_with_key_service(
-    model_id          = model_id,
-    developer_id      = developer_id,
-    model_name        = model_name,
-    obfuscation_key   = obfuscation_key,
-    salt_a            = salt_a,
-    salt_b            = salt_b,
-    developer_name    = developer_name,
-    developer_email   = developer_email,
-    model_description = description,
-    public_listing    = public_listing
+    model_id                = model_id,
+    developer_id            = developer_id,
+    model_name              = model_name,
+    obfuscation_key         = obfuscation_key,
+    salt_a                  = salt_a,
+    salt_b                  = salt_b,
+    registrant_relationship = registrant_relationship,
+    developer_name          = developer_name,
+    developer_email         = developer_email,
+    model_description       = description,
+    public_listing          = public_listing,
+    rate_limit_exempt       = rate_limit_exempt
   )
 
   # ---- Phase 3b: AES-256-GCM encrypt the obfuscated coefficients -------------

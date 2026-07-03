@@ -2,7 +2,7 @@
 #'
 #' A de-identified validation dataset (N = 1,500) for use with the ADNEX
 #' (Assessment of Different NEoplasias in the adneXa) model, included with
-#' evaluatr for use in package examples and vignettes. Provided by Dr Lasai
+#' evaluatr for use in package examples and vignettes. Provided by Lasai
 #' Barrenada, KU Leuven.
 #'
 #' @format An RDS file containing a data frame with 1,500 rows and 33 columns.
@@ -44,7 +44,7 @@
 #' early and advanced stage invasive, and secondary metastatic tumours.
 #' *BMJ* **349**: g5920. \doi{10.1136/bmj.g5920}
 #'
-#' @source Provided by Dr Lasai Barrenada, Department of Public Health and
+#' @source Provided by Lasai Barrenada, Department of Public Health and
 #'   Primary Care, KU Leuven. De-identified for package distribution.
 #'
 #' @seealso [secure_model_validation()], the developer guide vignette.

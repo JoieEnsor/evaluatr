@@ -96,11 +96,12 @@ test_that("logistic from glm: JSON structure is valid and coefficients are obfus
 
   tmp <- tempdir()
   result <- with_mocked_gmj(register_model(
-    model        = fit,
-    model_id     = "test_glm_001",
-    developer_id = "test_developer",
-    model_name   = "Test GLM Model",
-    output_dir   = tmp
+    model                   = fit,
+    model_id                = "test_glm_001",
+    developer_id            = "test_developer",
+    model_name              = "Test GLM Model",
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   # Return value is a list
@@ -142,14 +143,15 @@ test_that("logistic from manual coefficients: JSON structure is valid", {
 
   tmp <- tempdir()
   result <- with_mocked_gmj(register_model(
-    coefficients = real_coeffs,
-    model_type   = "logistic",
-    model_id     = "test_manual_001",
-    developer_id = "test_developer",
-    model_name   = "Test Manual Logistic",
-    outcome_type = "binary",
-    variables    = c("age", "biomarker_score", "treatment_group"),
-    output_dir   = tmp
+    coefficients            = real_coeffs,
+    model_type              = "logistic",
+    model_id                = "test_manual_001",
+    developer_id            = "test_developer",
+    model_name              = "Test Manual Logistic",
+    outcome_type            = "binary",
+    variables               = c("age", "biomarker_score", "treatment_group"),
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   expect_equal(result$model_type, "logistic")
@@ -185,12 +187,13 @@ test_that("multinomial from multinom: nested coefficient structure", {
 
   tmp <- tempdir()
   result <- with_mocked_gmj(register_model(
-    model              = fit,
-    model_id           = "test_multinom_001",
-    developer_id       = "test_developer",
-    model_name         = "Test Multinomial",
-    reference_category = "cat_A",
-    output_dir         = tmp
+    model                   = fit,
+    model_id                = "test_multinom_001",
+    developer_id            = "test_developer",
+    model_name              = "Test Multinomial",
+    reference_category      = "cat_A",
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   expect_equal(result$model_type, "multinomial")
@@ -236,12 +239,13 @@ test_that("cox from coxph: model_parameters preserved", {
   )
   tmp <- tempdir()
   result <- with_mocked_gmj(register_model(
-    model            = fit,
-    model_id         = "test_cox_001",
-    developer_id     = "test_developer",
-    model_name       = "Test Cox Model",
-    model_parameters = mp,
-    output_dir       = tmp
+    model                   = fit,
+    model_id                = "test_cox_001",
+    developer_id            = "test_developer",
+    model_name              = "Test Cox Model",
+    model_parameters        = mp,
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   expect_equal(result$model_type, "cox")
@@ -284,12 +288,13 @@ test_that("weibull from survreg: shape parameter extracted and preserved", {
   mp  <- list(timepoints = c(5, 10, 15))
   tmp <- tempdir()
   result <- with_mocked_gmj(register_model(
-    model            = fit,
-    model_id         = "test_weibull_001",
-    developer_id     = "test_developer",
-    model_name       = "Test Weibull Model",
-    model_parameters = mp,
-    output_dir       = tmp
+    model                   = fit,
+    model_id                = "test_weibull_001",
+    developer_id            = "test_developer",
+    model_name              = "Test Weibull Model",
+    model_parameters        = mp,
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   expect_equal(result$model_type, "weibull")
@@ -327,14 +332,15 @@ test_that("round-trip logistic: JSON decrypts and produces valid predictions", {
 
   tmp <- tempdir()
   with_mocked_gmj_capture(register_model(
-    coefficients = real_coeffs,
-    model_type   = "logistic",
-    model_id     = "roundtrip_logistic",
-    developer_id = "test_developer",
-    model_name   = "Round-trip Test",
-    outcome_type = "binary",
-    variables    = c("age", "biomarker_score", "treatment_group"),
-    output_dir   = tmp
+    coefficients            = real_coeffs,
+    model_type              = "logistic",
+    model_id                = "roundtrip_logistic",
+    developer_id            = "test_developer",
+    model_name              = "Round-trip Test",
+    outcome_type            = "binary",
+    variables               = c("age", "biomarker_score", "treatment_group"),
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   set.seed(99)
@@ -374,15 +380,16 @@ test_that("round-trip multinomial: JSON decrypts and produces valid predictions"
 
   tmp <- tempdir()
   with_mocked_gmj_capture(register_model(
-    coefficients       = real_coeffs,
-    model_type         = "multinomial",
-    model_id           = "roundtrip_multinom",
-    developer_id       = "test_developer",
-    model_name         = "Round-trip Multinomial",
-    outcome_type       = "multinomial",
-    variables          = c("x1", "x2"),
-    reference_category = "cat_A",
-    output_dir         = tmp
+    coefficients            = real_coeffs,
+    model_type              = "multinomial",
+    model_id                = "roundtrip_multinom",
+    developer_id            = "test_developer",
+    model_name              = "Round-trip Multinomial",
+    outcome_type            = "multinomial",
+    variables               = c("x1", "x2"),
+    reference_category      = "cat_A",
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   set.seed(77)
@@ -425,15 +432,16 @@ test_that("round-trip Cox: JSON decrypts and produces valid predictions", {
 
   tmp <- tempdir()
   with_mocked_gmj_capture(register_model(
-    coefficients     = real_coeffs,
-    model_type       = "cox",
-    model_id         = "roundtrip_cox",
-    developer_id     = "test_developer",
-    model_name       = "Round-trip Cox",
-    outcome_type     = "survival",
-    variables        = c("age", "bmi"),
-    model_parameters = mp,
-    output_dir       = tmp
+    coefficients            = real_coeffs,
+    model_type              = "cox",
+    model_id                = "roundtrip_cox",
+    developer_id            = "test_developer",
+    model_name              = "Round-trip Cox",
+    outcome_type            = "survival",
+    variables               = c("age", "bmi"),
+    model_parameters        = mp,
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   set.seed(55)
@@ -476,15 +484,16 @@ test_that("round-trip Weibull AFT: JSON decrypts and produces valid predictions"
 
   tmp <- tempdir()
   with_mocked_gmj_capture(register_model(
-    coefficients     = real_coeffs,
-    model_type       = "weibull",
-    model_id         = "roundtrip_weibull",
-    developer_id     = "test_developer",
-    model_name       = "Round-trip Weibull",
-    outcome_type     = "survival",
-    variables        = c("age"),
-    model_parameters = mp,
-    output_dir       = tmp
+    coefficients            = real_coeffs,
+    model_type              = "weibull",
+    model_id                = "roundtrip_weibull",
+    developer_id            = "test_developer",
+    model_name              = "Round-trip Weibull",
+    outcome_type            = "survival",
+    variables               = c("age"),
+    model_parameters        = mp,
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   set.seed(33)
@@ -547,9 +556,10 @@ test_that("error when model_name is missing", {
 test_that("error when both model and coefficients are NULL", {
   expect_error(
     register_model(
-      model_id     = "test",
-      developer_id = "test_developer",
-      model_name   = "Test"
+      model_id                = "test",
+      developer_id            = "test_developer",
+      model_name              = "Test",
+      registrant_relationship = "original_developer"
     ),
     "One of 'model' or 'coefficients'"
   )
@@ -560,11 +570,12 @@ test_that("error when both model and coefficients are provided", {
   fit <- glm(rbinom(30, 1, 0.5) ~ rnorm(30), family = binomial)
   expect_error(
     register_model(
-      model        = fit,
-      coefficients = c(x = 1.0),
-      model_id     = "test",
-      developer_id = "test_developer",
-      model_name   = "Test"
+      model                   = fit,
+      coefficients            = c(x = 1.0),
+      model_id                = "test",
+      developer_id            = "test_developer",
+      model_name              = "Test",
+      registrant_relationship = "original_developer"
     ),
     "not both"
   )
@@ -574,10 +585,11 @@ test_that("error for unsupported model class", {
   fit <- lm(rnorm(30) ~ rnorm(30))
   expect_error(
     register_model(
-      model        = fit,
-      model_id     = "test",
-      developer_id = "test_developer",
-      model_name   = "Test"
+      model                   = fit,
+      model_id                = "test",
+      developer_id            = "test_developer",
+      model_name              = "Test",
+      registrant_relationship = "original_developer"
     ),
     "Unsupported model class"
   )
@@ -587,10 +599,11 @@ test_that("error for non-binomial glm", {
   fit <- glm(rpois(30, 2) ~ rnorm(30), family = poisson)
   expect_error(
     register_model(
-      model        = fit,
-      model_id     = "test",
-      developer_id = "test_developer",
-      model_name   = "Test"
+      model                   = fit,
+      model_id                = "test",
+      developer_id            = "test_developer",
+      model_name              = "Test",
+      registrant_relationship = "original_developer"
     ),
     "binomial"
   )
@@ -599,11 +612,12 @@ test_that("error for non-binomial glm", {
 test_that("error when model_type missing for manual coefficients", {
   expect_error(
     register_model(
-      coefficients = c("(Intercept)" = -1.0, age = 0.02),
-      model_id     = "test",
-      developer_id = "test_developer",
-      model_name   = "Test",
-      variables    = "age"
+      coefficients            = c("(Intercept)" = -1.0, age = 0.02),
+      model_id                = "test",
+      developer_id            = "test_developer",
+      model_name              = "Test",
+      variables               = "age",
+      registrant_relationship = "original_developer"
     ),
     "model_type"
   )
@@ -612,11 +626,12 @@ test_that("error when model_type missing for manual coefficients", {
 test_that("error when variables missing for manual coefficients", {
   expect_error(
     register_model(
-      coefficients = c("(Intercept)" = -1.0, age = 0.02),
-      model_type   = "logistic",
-      model_id     = "test",
-      developer_id = "test_developer",
-      model_name   = "Test"
+      coefficients            = c("(Intercept)" = -1.0, age = 0.02),
+      model_type              = "logistic",
+      model_id                = "test",
+      developer_id            = "test_developer",
+      model_name              = "Test",
+      registrant_relationship = "original_developer"
     ),
     "variables"
   )
@@ -625,12 +640,13 @@ test_that("error when variables missing for manual coefficients", {
 test_that("error for Cox without model_parameters", {
   expect_error(
     register_model(
-      coefficients = c(age = 0.05),
-      model_type   = "cox",
-      model_id     = "test",
-      developer_id = "test_developer",
-      model_name   = "Test",
-      variables    = "age"
+      coefficients            = c(age = 0.05),
+      model_type              = "cox",
+      model_id                = "test",
+      developer_id            = "test_developer",
+      model_name              = "Test",
+      variables               = "age",
+      registrant_relationship = "original_developer"
     ),
     "timepoints"
   )
@@ -639,13 +655,14 @@ test_that("error for Cox without model_parameters", {
 test_that("error for Cox without baseline_survival", {
   expect_error(
     register_model(
-      coefficients     = c(age = 0.05),
-      model_type       = "cox",
-      model_id         = "test",
-      developer_id     = "test_developer",
-      model_name       = "Test",
-      variables        = "age",
-      model_parameters = list(timepoints = c(1, 2, 5))
+      coefficients            = c(age = 0.05),
+      model_type              = "cox",
+      model_id                = "test",
+      developer_id            = "test_developer",
+      model_name              = "Test",
+      variables               = "age",
+      model_parameters        = list(timepoints = c(1, 2, 5)),
+      registrant_relationship = "original_developer"
     ),
     "baseline_survival"
   )
@@ -654,14 +671,15 @@ test_that("error for Cox without baseline_survival", {
 test_that("error for multinomial without reference_category in manual mode", {
   expect_error(
     register_model(
-      coefficients = list(
+      coefficients            = list(
         cat_B = c("(Intercept)" = -0.5, x1 = 0.3)
       ),
-      model_type   = "multinomial",
-      model_id     = "test",
-      developer_id = "test_developer",
-      model_name   = "Test",
-      variables    = "x1"
+      model_type              = "multinomial",
+      model_id                = "test",
+      developer_id            = "test_developer",
+      model_name              = "Test",
+      variables               = "x1",
+      registrant_relationship = "original_developer"
     ),
     "reference_category"
   )
@@ -670,13 +688,14 @@ test_that("error for multinomial without reference_category in manual mode", {
 test_that("error for multinomial with non-list coefficients", {
   expect_error(
     register_model(
-      coefficients       = c("(Intercept)" = -0.5, x1 = 0.3),
-      model_type         = "multinomial",
-      model_id           = "test",
-      developer_id       = "test_developer",
-      model_name         = "Test",
-      variables          = "x1",
-      reference_category = "cat_A"
+      coefficients            = c("(Intercept)" = -0.5, x1 = 0.3),
+      model_type              = "multinomial",
+      model_id                = "test",
+      developer_id            = "test_developer",
+      model_name              = "Test",
+      variables               = "x1",
+      reference_category      = "cat_A",
+      registrant_relationship = "original_developer"
     ),
     "named list"
   )
@@ -691,14 +710,15 @@ test_that("output file exists, is valid JSON, and contains all required fields",
   real_coeffs <- c("(Intercept)" = -1.25, age = 0.02, score = 0.8)
   tmp <- tempdir()
   with_mocked_gmj(register_model(
-    coefficients = real_coeffs,
-    model_type   = "logistic",
-    model_id     = "file_test_001",
-    developer_id = "test_developer",
-    model_name   = "File Test Model",
-    outcome_type = "binary",
-    variables    = c("age", "score"),
-    output_dir   = tmp
+    coefficients            = real_coeffs,
+    model_type              = "logistic",
+    model_id                = "file_test_001",
+    developer_id            = "test_developer",
+    model_name              = "File Test Model",
+    outcome_type            = "binary",
+    variables               = c("age", "score"),
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   out_path <- file.path(tmp, "file_test_001_specification.json")
@@ -733,13 +753,14 @@ test_that("output filename is always derived from model_id", {
   real_coeffs <- c("(Intercept)" = -1.0, age = 0.02)
   tmp <- tempdir()
   with_mocked_gmj(register_model(
-    coefficients = real_coeffs,
-    model_type   = "logistic",
-    model_id     = "filename_test",
-    developer_id = "test_developer",
-    model_name   = "Filename Convention Test",
-    variables    = "age",
-    output_dir   = tmp
+    coefficients            = real_coeffs,
+    model_type              = "logistic",
+    model_id                = "filename_test",
+    developer_id            = "test_developer",
+    model_name              = "Filename Convention Test",
+    variables               = "age",
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
   expect_true(file.exists(file.path(tmp, "filename_test_specification.json")))
 })
@@ -750,13 +771,14 @@ test_that("output_dir is created if it does not exist", {
   expect_false(dir.exists(new_dir))
 
   with_mocked_gmj(register_model(
-    coefficients = real_coeffs,
-    model_type   = "logistic",
-    model_id     = "dir_test",
-    developer_id = "test_developer",
-    model_name   = "Dir Creation Test",
-    variables    = "age",
-    output_dir   = new_dir
+    coefficients            = real_coeffs,
+    model_type              = "logistic",
+    model_id                = "dir_test",
+    developer_id            = "test_developer",
+    model_name              = "Dir Creation Test",
+    variables               = "age",
+    registrant_relationship = "original_developer",
+    output_dir              = new_dir
   ))
 
   expect_true(dir.exists(new_dir))
@@ -774,14 +796,15 @@ test_that("preprocessing string is written to JSON and round-trips correctly", {
 
   tmp <- tempdir()
   result <- with_mocked_gmj(register_model(
-    coefficients  = real_coeffs,
-    model_type    = "logistic",
-    model_id      = "preproc_test",
-    developer_id  = "test_developer",
-    model_name    = "Preprocessing Test",
-    variables     = c("age", "sexfemale"),
-    preprocessing = preprocessing,
-    output_dir    = tmp
+    coefficients            = real_coeffs,
+    model_type              = "logistic",
+    model_id                = "preproc_test",
+    developer_id            = "test_developer",
+    model_name              = "Preprocessing Test",
+    variables               = c("age", "sexfemale"),
+    preprocessing           = preprocessing,
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   # In-memory result
@@ -799,14 +822,15 @@ test_that("preprocessing round-trip: .predict_secure() executes preprocessing co
 
   tmp <- tempdir()
   with_mocked_gmj_capture(register_model(
-    coefficients  = real_coeffs,
-    model_type    = "logistic",
-    model_id      = "preproc_roundtrip",
-    developer_id  = "test_developer",
-    model_name    = "Preprocessing Round-trip",
-    variables     = c("age", "sexfemale"),
-    preprocessing = preprocessing,
-    output_dir    = tmp
+    coefficients            = real_coeffs,
+    model_type              = "logistic",
+    model_id                = "preproc_roundtrip",
+    developer_id            = "test_developer",
+    model_name              = "Preprocessing Round-trip",
+    variables               = c("age", "sexfemale"),
+    preprocessing           = preprocessing,
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   set.seed(44)
@@ -847,14 +871,15 @@ test_that("Phase 3b: generated JSON has encrypted_coefficients, not plaintext", 
   real_coeffs <- c("(Intercept)" = -1.25, age = 0.02, score = 0.8)
   tmp <- tempdir()
   result <- with_mocked_gmj(register_model(
-    coefficients = real_coeffs,
-    model_type   = "logistic",
-    model_id     = "enc_test_001",
-    developer_id = "test_developer",
-    model_name   = "Encryption Test",
-    outcome_type = "binary",
-    variables    = c("age", "score"),
-    output_dir   = tmp
+    coefficients            = real_coeffs,
+    model_type              = "logistic",
+    model_id                = "enc_test_001",
+    developer_id            = "test_developer",
+    model_name              = "Encryption Test",
+    outcome_type            = "binary",
+    variables               = c("age", "score"),
+    registrant_relationship = "original_developer",
+    output_dir              = tmp
   ))
 
   expect_true("encrypted_coefficients" %in% names(result))

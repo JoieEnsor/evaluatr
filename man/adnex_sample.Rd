@@ -32,13 +32,13 @@ predictions from the ADNEX-without-CA-125 model (for verification).}
 }
 }
 \source{
-Provided by Dr Lasai Barrenada, Department of Public Health and
+Provided by Lasai Barrenada, Department of Public Health and
 Primary Care, KU Leuven. De-identified for package distribution.
 }
 \description{
 A de-identified validation dataset (N = 1,500) for use with the ADNEX
 (Assessment of Different NEoplasias in the adneXa) model, included with
-evaluatr for use in package examples and vignettes. Provided by Dr Lasai
+evaluatr for use in package examples and vignettes. Provided by Lasai
 Barrenada, KU Leuven.
 }
 \details{

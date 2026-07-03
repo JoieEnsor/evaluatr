@@ -25,22 +25,32 @@
 
 .register_model_with_key_service <- function(model_id, developer_id, model_name,
                                              obfuscation_key, salt_a, salt_b,
-                                             developer_name  = NULL,
-                                             developer_email = NULL,
+                                             registrant_relationship,
+                                             developer_name    = NULL,
+                                             developer_email   = NULL,
                                              model_description = NULL,
-                                             public_listing  = TRUE) {
+                                             public_listing    = TRUE,
+                                             rate_limit_exempt = FALSE) {
+
+  valid_relationships <- c("original_developer", "authorised_proxy", "independent")
+  if (!registrant_relationship %in% valid_relationships) {
+    stop("'registrant_relationship' must be one of: ",
+         paste(valid_relationships, collapse = ", "), call. = FALSE)
+  }
 
   base_url <- .key_service_url()
   endpoint <- paste0(base_url, "/register")
 
   body_list <- list(
-    model_id        = jsonlite::unbox(model_id),
-    developer_id    = jsonlite::unbox(developer_id),
-    model_name      = jsonlite::unbox(model_name),
-    obfuscation_key = jsonlite::unbox(obfuscation_key),
-    salt_a          = jsonlite::unbox(salt_a),
-    salt_b          = jsonlite::unbox(salt_b),
-    public_listing  = jsonlite::unbox(isTRUE(public_listing))
+    model_id                = jsonlite::unbox(model_id),
+    developer_id            = jsonlite::unbox(developer_id),
+    model_name              = jsonlite::unbox(model_name),
+    obfuscation_key         = jsonlite::unbox(obfuscation_key),
+    salt_a                  = jsonlite::unbox(salt_a),
+    salt_b                  = jsonlite::unbox(salt_b),
+    registrant_relationship = jsonlite::unbox(registrant_relationship),
+    public_listing          = jsonlite::unbox(isTRUE(public_listing)),
+    rate_limit_exempt       = jsonlite::unbox(isTRUE(rate_limit_exempt))
   )
   if (!is.null(developer_name) && nzchar(trimws(developer_name))) {
     body_list$developer_name <- jsonlite::unbox(trimws(developer_name))
@@ -117,10 +127,14 @@
 #' identify the developer contact for requesting a validation token.
 #'
 #' Only models registered with `public_listing = TRUE` (the default in
-#' [register_model()]) appear in the results.
+#' [register_model()]) appear in the results. By default only endorsed models
+#' are returned; set `include_unendorsed = TRUE` to see all registered models.
 #'
 #' @param as_data_frame Logical. If `TRUE` (default) return a `data.frame`.
 #'   If `FALSE` return the raw parsed list from the JSON response.
+#' @param include_unendorsed Logical. If `FALSE` (default) only return models
+#'   endorsed by the evaluatr registry. Set to `TRUE` to include all publicly
+#'   listed models regardless of endorsement status.
 #'
 #' @return A `data.frame` with columns:
 #'   \describe{
@@ -134,6 +148,11 @@
 #'       (may be `NA` if not provided at registration).}
 #'     \item{model_description}{Free-text description of the model (may be
 #'       `NA` if not provided at registration).}
+#'     \item{registrant_relationship}{Registrant's declared relationship to
+#'       the model: `"original_developer"`, `"authorised_proxy"`, or
+#'       `"independent"`.}
+#'     \item{endorsed}{Integer flag: `1` if the model has been endorsed by
+#'       the evaluatr registry, `0` otherwise.}
 #'   }
 #'
 #' @details
@@ -145,9 +164,12 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Browse all publicly registered models
+#' # Browse endorsed models (default)
 #' models <- list_registered_models()
 #' print(models[, c("model_id", "model_name", "developer_email")])
+#'
+#' # Include unendorsed models
+#' all_models <- list_registered_models(include_unendorsed = TRUE)
 #'
 #' # Find models by a specific developer
 #' subset(models, developer_id == "JoieEnsor")
@@ -155,10 +177,12 @@
 #'
 #' @seealso [secure_model_validation()], [register_model()]
 #' @export
-list_registered_models <- function(as_data_frame = TRUE) {
+list_registered_models <- function(as_data_frame = TRUE,
+                                   include_unendorsed = FALSE) {
 
   base_url <- .key_service_url()
-  endpoint <- paste0(base_url, "/models")
+  endpoint <- paste0(base_url, "/models",
+                     if (isTRUE(include_unendorsed)) "?include_unendorsed=true" else "")
 
   h <- curl::new_handle()
   curl::handle_setheaders(h,
@@ -199,7 +223,8 @@ list_registered_models <- function(as_data_frame = TRUE) {
   models <- resp_body$models
   expected_cols <- c("model_id", "model_name", "developer_id",
                      "developer_name", "developer_email",
-                     "model_description")
+                     "model_description", "registrant_relationship",
+                     "endorsed")
 
   if (is.null(models) || length(models) == 0) {
     df <- as.data.frame(
@@ -329,7 +354,9 @@ list_registered_models <- function(as_data_frame = TRUE) {
          "Contact the package maintainer.", call. = FALSE)
   }
 
-  list(
-    encryption_key = resp_body$encryption_key
-  )
+  if (isFALSE(resp_body$endorsed)) {
+    message("Note: this model has not been endorsed by the evaluatr registry.")
+  }
+
+  list(encryption_key = resp_body$encryption_key)
 }

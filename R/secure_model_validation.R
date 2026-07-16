@@ -236,7 +236,8 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
     decryption_key  = keys$encryption_key,
     github_token    = github_token,
     repo_owner      = repo_owner,
-    repo_name       = repo_name
+    repo_name       = repo_name,
+    validation_id   = keys$validation_id
   )
 
   return(result)

@@ -124,6 +124,9 @@
 #   Worker B authentication. Never stored in an R object beyond this call.
 # @param repo_owner Character. GitHub repository owner.
 # @param repo_name Character. GitHub repository name.
+# @param validation_id Character. Id of the validations row Worker A created,
+#   passed into C++ and on to Worker B so the row is marked completed once the
+#   obfuscation key has been served. Empty string if unknown.
 # @param worker_b_url Character. Base URL for Worker B. Defaults to production URL
 #   read from getOption("evaluatr.obfuscation_service_url").
 # @return An object of class "evaluatr_result".
@@ -134,6 +137,7 @@
                             github_token = "",
                             repo_owner = "",
                             repo_name = "",
+                            validation_id = "",
                             worker_b_url = getOption(
                               "evaluatr.obfuscation_service_url",
                               default = paste0(
@@ -149,6 +153,12 @@
         isdebugged(.run_preprocessing)) {
     stop("evaluatr: debugging of internal security functions is not permitted.")
   }
+
+  # C++ requires a string validation_id; coerce a missing/NULL value to "".
+  if (is.null(validation_id) || length(validation_id) == 0) {
+    validation_id <- ""
+  }
+  validation_id <- as.character(validation_id)
 
   # Decrypt and prepare encoded content if a decryption key was provided
   if (nzchar(decryption_key) && nchar(decryption_key) == 64) {
@@ -204,6 +214,7 @@
     repo_owner      = repo_owner,
     repo_name       = repo_name,
     model_id        = model_id,
+    validation_id   = validation_id,
     worker_b_url    = worker_b_url
   )
 

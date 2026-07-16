@@ -358,5 +358,13 @@ list_registered_models <- function(as_data_frame = TRUE,
     message("Note: this model has not been endorsed by the evaluatr registry.")
   }
 
-  list(encryption_key = resp_body$encryption_key)
+  # validation_id anchors this validation row (Worker A logs it with
+  # obfuscation_approved = 0); it is threaded through to the C++ engine, which
+  # passes it to Worker B so the row can be marked as completed. Kept as a
+  # string to match the hand-rolled JSON parsing in the C++ engine.
+  validation_id <- if (!is.null(resp_body$validation_id))
+    as.character(resp_body$validation_id) else ""
+
+  list(encryption_key = resp_body$encryption_key,
+       validation_id  = validation_id)
 }

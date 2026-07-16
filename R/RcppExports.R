@@ -31,13 +31,15 @@
 #' @param repo_owner Character. GitHub repository owner.
 #' @param repo_name Character. GitHub repository name.
 #' @param model_id Character. Model identifier.
+#' @param validation_id Character. Id of the validations row created by
+#'   Worker A; forwarded to Worker B so the row can be marked completed.
 #' @param worker_b_url Character. Key service URL.
 #' @return A named R list with shuffled_outcomes, shuffled_pred_matrix,
 #'   shuffled_by (if by_vec non-null), is_single_col, has_by.
 #'
 #' @keywords internal
-.predict_from_encoded_cpp <- function(encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params, github_token, repo_owner, repo_name, model_id, worker_b_url) {
-    .Call(`_evaluatr_predict_from_encoded_cpp`, encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params, github_token, repo_owner, repo_name, model_id, worker_b_url)
+.predict_from_encoded_cpp <- function(encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params, github_token, repo_owner, repo_name, model_id, validation_id, worker_b_url) {
+    .Call(`_evaluatr_predict_from_encoded_cpp`, encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params, github_token, repo_owner, repo_name, model_id, validation_id, worker_b_url)
 }
 
 #' Obfuscate coefficient values

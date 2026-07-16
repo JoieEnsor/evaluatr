@@ -147,9 +147,10 @@ test_that("registration fails with short key (< 64 chars) from service", {
 # .fetch_decryption_key() unit tests
 # ============================================================
 
-test_that("successful key fetch returns list with encryption_key only", {
+test_that("successful key fetch returns encryption_key and validation_id", {
   mock_response <- make_curl_response(200, list(
-    encryption_key = dummy_key
+    encryption_key = dummy_key,
+    validation_id  = 42L
   ))
 
   result <- with_mocked_bindings(
@@ -167,7 +168,31 @@ test_that("successful key fetch returns list with encryption_key only", {
   expect_type(result, "list")
   expect_equal(nchar(result$encryption_key), 64)
   expect_equal(result$encryption_key, dummy_key)
+  # validation_id is captured from Worker A and kept as a string for C++
+  expect_equal(result$validation_id, "42")
   expect_null(result$obfuscation_key)  # obf key no longer returned by Worker A
+})
+
+test_that("key fetch tolerates a response with no validation_id", {
+  mock_response <- make_curl_response(200, list(
+    encryption_key = dummy_key
+  ))
+
+  result <- with_mocked_bindings(
+    .fetch_decryption_key(
+      model_id     = "test_model_001",
+      n            = 500L,
+      github_token = "fake_token",
+      repo_owner   = "JoieEnsor",
+      repo_name    = "evaluatr_testing_environment"
+    ),
+    curl_fetch_memory = function(url, handle) mock_response,
+    .package = "curl"
+  )
+
+  # Missing validation_id becomes "" rather than NULL, so it can be marshalled
+  # into the C++ engine as a std::string.
+  expect_equal(result$validation_id, "")
 })
 
 test_that("unknown model_id (404) stops with informative error", {
@@ -319,7 +344,7 @@ mock_fetch_logistic_ks <- function(api_url, token) {
 
 mock_fetch_decryption_key_ok <- function(model_id, n, github_token,
                                          repo_owner, repo_name) {
-  list(encryption_key = dummy_key)
+  list(encryption_key = dummy_key, validation_id = "1")
 }
 
 test_that("secure_model_validation() succeeds with key service mocked", {

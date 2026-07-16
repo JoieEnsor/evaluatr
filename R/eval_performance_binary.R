@@ -556,7 +556,7 @@ eval_performance <- function(validation_result,
 
   eci <- mean((flc - p)^2) / mean((mean(y) - p)^2)
   ici <- mean(abs(flc - p))
-  hlt <- ResourceSelection::hoslem.test(y, p, g = ngr)
+  hlt <- suppressWarnings(ResourceSelection::hoslem.test(y, p, g = ngr))
   ece <- sum(abs(hlt$expected[, 2] - hlt$observed[, 2]) / length(y))
 
   df <- as.data.frame(t(c(oe, int, sl, eci, ici, ece)))

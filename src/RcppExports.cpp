@@ -22,8 +22,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // predict_from_encoded_cpp
-List predict_from_encoded_cpp(std::string encoded_content, std::string model_type, NumericMatrix design_matrix, NumericVector outcome_vec, SEXP by_vec, SEXP model_params, std::string github_token, std::string repo_owner, std::string repo_name, std::string model_id, std::string worker_b_url);
-RcppExport SEXP _evaluatr_predict_from_encoded_cpp(SEXP encoded_contentSEXP, SEXP model_typeSEXP, SEXP design_matrixSEXP, SEXP outcome_vecSEXP, SEXP by_vecSEXP, SEXP model_paramsSEXP, SEXP github_tokenSEXP, SEXP repo_ownerSEXP, SEXP repo_nameSEXP, SEXP model_idSEXP, SEXP worker_b_urlSEXP) {
+List predict_from_encoded_cpp(std::string encoded_content, std::string model_type, NumericMatrix design_matrix, NumericVector outcome_vec, SEXP by_vec, SEXP model_params, std::string github_token, std::string repo_owner, std::string repo_name, std::string model_id, std::string validation_id, std::string worker_b_url);
+RcppExport SEXP _evaluatr_predict_from_encoded_cpp(SEXP encoded_contentSEXP, SEXP model_typeSEXP, SEXP design_matrixSEXP, SEXP outcome_vecSEXP, SEXP by_vecSEXP, SEXP model_paramsSEXP, SEXP github_tokenSEXP, SEXP repo_ownerSEXP, SEXP repo_nameSEXP, SEXP model_idSEXP, SEXP validation_idSEXP, SEXP worker_b_urlSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -37,8 +37,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< std::string >::type repo_owner(repo_ownerSEXP);
     Rcpp::traits::input_parameter< std::string >::type repo_name(repo_nameSEXP);
     Rcpp::traits::input_parameter< std::string >::type model_id(model_idSEXP);
+    Rcpp::traits::input_parameter< std::string >::type validation_id(validation_idSEXP);
     Rcpp::traits::input_parameter< std::string >::type worker_b_url(worker_b_urlSEXP);
-    rcpp_result_gen = Rcpp::wrap(predict_from_encoded_cpp(encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params, github_token, repo_owner, repo_name, model_id, worker_b_url));
+    rcpp_result_gen = Rcpp::wrap(predict_from_encoded_cpp(encoded_content, model_type, design_matrix, outcome_vec, by_vec, model_params, github_token, repo_owner, repo_name, model_id, validation_id, worker_b_url));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -59,7 +60,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_evaluatr_extract_model_metadata_cpp", (DL_FUNC) &_evaluatr_extract_model_metadata_cpp, 1},
-    {"_evaluatr_predict_from_encoded_cpp", (DL_FUNC) &_evaluatr_predict_from_encoded_cpp, 11},
+    {"_evaluatr_predict_from_encoded_cpp", (DL_FUNC) &_evaluatr_predict_from_encoded_cpp, 12},
     {"_evaluatr_obfuscate_coefficients_cpp", (DL_FUNC) &_evaluatr_obfuscate_coefficients_cpp, 4},
     {NULL, NULL, 0}
 };

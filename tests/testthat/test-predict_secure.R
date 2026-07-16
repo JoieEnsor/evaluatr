@@ -572,6 +572,7 @@ test_that("predict_from_encoded_cpp result contains no coefficient values", {
     repo_owner      = "",
     repo_name       = "",
     model_id        = "test",
+    validation_id   = "",
     worker_b_url    = ""
   )
 

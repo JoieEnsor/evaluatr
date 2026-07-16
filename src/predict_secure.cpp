@@ -819,6 +819,8 @@ List extract_model_metadata_cpp(std::string encoded_content) {
 //' @param repo_owner Character. GitHub repository owner.
 //' @param repo_name Character. GitHub repository name.
 //' @param model_id Character. Model identifier.
+//' @param validation_id Character. Id of the validations row created by
+//'   Worker A; forwarded to Worker B so the row can be marked completed.
 //' @param worker_b_url Character. Key service URL.
 //' @return A named R list with shuffled_outcomes, shuffled_pred_matrix,
 //'   shuffled_by (if by_vec non-null), is_single_col, has_by.
@@ -835,6 +837,7 @@ List predict_from_encoded_cpp(std::string encoded_content,
                                std::string repo_owner,
                                std::string repo_name,
                                std::string model_id,
+                               std::string validation_id,
                                std::string worker_b_url) {
 
   // Decode and parse
@@ -858,8 +861,17 @@ List predict_from_encoded_cpp(std::string encoded_content,
   };
 
   if (!github_token.empty()) {
+    // validation_id is a numeric row id from Worker A; emit it unquoted so it
+    // arrives as a JSON number, with a trailing comma since more fields follow.
+    // Omit it entirely if unknown (empty string).
+    std::string validation_id_field =
+      validation_id.empty()
+        ? ""
+        : "\"validation_id\":" + validation_id + ",";
+
     std::string req_body =
-      "{\"model_id\":\"" + model_id + "\","
+      "{" + validation_id_field +
+      "\"model_id\":\"" + model_id + "\","
       "\"github_token\":\"" + github_token + "\","
       "\"repo_owner\":\"" + repo_owner + "\","
       "\"repo_name\":\"" + repo_name + "\"}";

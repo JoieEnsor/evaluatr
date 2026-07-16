@@ -128,7 +128,8 @@ mock_fetch_multinomial <- function(api_url, token) {
 # For v0/v1 mock JSONs (no encryption), the encryption_key value is unused.
 mock_fetch_key <- function(model_id, n, github_token, repo_owner, repo_name) {
   list(
-    encryption_key = paste0(rep("b", 64), collapse = "")
+    encryption_key = paste0(rep("b", 64), collapse = ""),
+    validation_id  = "1"
   )
 }
 

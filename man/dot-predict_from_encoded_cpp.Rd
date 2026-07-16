@@ -15,6 +15,7 @@
   repo_owner,
   repo_name,
   model_id,
+  validation_id,
   worker_b_url
 )
 }
@@ -38,6 +39,9 @@
 \item{repo_name}{Character. GitHub repository name.}
 
 \item{model_id}{Character. Model identifier.}
+
+\item{validation_id}{Character. Id of the validations row created by
+Worker A; forwarded to Worker B so the row can be marked completed.}
 
 \item{worker_b_url}{Character. Key service URL.}
 }

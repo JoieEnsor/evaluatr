@@ -5,13 +5,20 @@
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
 # Internal: fetch model specification from GitHub API
+#
+# The demo credential is not a real GitHub token, so the Authorization
+# header is omitted when it's used.
 .fetch_github_model <- function(api_url, token) {
 
   h <- curl::new_handle()
-  curl::handle_setheaders(h,
-    "Authorization" = paste("token", token),
-    "Accept"        = "application/vnd.github.v3+json",
-    "User-Agent"    = "evaluatr-r-package")
+  headers <- c(
+    "Accept"     = "application/vnd.github.v3+json",
+    "User-Agent" = "evaluatr-r-package"
+  )
+  if (!identical(token, "evaluatr-demo")) {
+    headers["Authorization"] <- paste("token", token)
+  }
+  curl::handle_setheaders(h, .list = headers)
   curl::handle_setopt(h, timeout = 30, followlocation = TRUE, ssl_verifypeer = TRUE)
 
   tryCatch({
@@ -123,7 +130,7 @@
 #'   repo_owner      = "developer-username",
 #'   repo_name       = "my-models",
 #'   model_id        = "dvt_model_v1",
-#'   github_token    = Sys.getenv("EVALUATR_TOKEN"),
+#'   github_token    = "EVALUATR_TOKEN",
 #'   validation_data = dvt_val,
 #'   outcome         = "dvt"
 #' )
@@ -137,7 +144,7 @@
 #'   repo_owner      = "developer-username",
 #'   repo_name       = "my-models",
 #'   model_id        = "dvt_model_v1",
-#'   github_token    = Sys.getenv("EVALUATR_TOKEN"),
+#'   github_token    = "EVALUATR_TOKEN",
 #'   validation_data = dvt_val,
 #'   outcome         = "dvt",
 #'   by              = "study"

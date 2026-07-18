@@ -52,7 +52,7 @@ result <- secure_model_validation(
   repo_owner      = "JoieEnsor",
   repo_name       = "evaluatr-demo-models",
   model_id        = "dvt_logistic_v1",
-  github_token    = "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",
+  github_token    = "evaluatr-demo",
   validation_data = dvt_val,
   outcome         = "dvt"
 )

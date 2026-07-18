@@ -294,6 +294,101 @@ test_that("unreachable service at /key stops with informative error", {
   )
 })
 
+# ============================================================
+# New: public demo credential ("evaluatr-demo")
+# ============================================================
+
+test_that("demo credential succeeds when worker allows it (demo_access = 1 model)", {
+  mock_response <- make_curl_response(200, list(
+    encryption_key = dummy_key,
+    validation_id  = 7L
+  ))
+
+  result <- with_mocked_bindings(
+    .fetch_decryption_key(
+      model_id     = "dvt_logistic_v1",
+      n            = 500L,
+      github_token = "evaluatr-demo",
+      repo_owner   = "JoieEnsor",
+      repo_name    = "evaluatr-demo-models"
+    ),
+    curl_fetch_memory = function(url, handle) mock_response,
+    .package = "curl"
+  )
+
+  expect_equal(result$encryption_key, dummy_key)
+  expect_equal(result$validation_id, "7")
+})
+
+test_that("demo credential rejected (401) for a demo_access = 0 model", {
+  mock_response <- make_curl_response(401, list(
+    error = "GitHub token validation failed: invalid or expired token"
+  ))
+
+  expect_error(
+    with_mocked_bindings(
+      .fetch_decryption_key(
+        model_id     = "some_private_model",
+        n            = 500L,
+        github_token = "evaluatr-demo",
+        repo_owner   = "SomeDeveloper",
+        repo_name    = "their-private-repo"
+      ),
+      curl_fetch_memory = function(url, handle) mock_response,
+      .package = "curl"
+    ),
+    "GitHub token validation failed"
+  )
+})
+
+test_that("real PAT path is unaffected by the demo credential logic", {
+  mock_response <- make_curl_response(200, list(
+    encryption_key = dummy_key,
+    validation_id  = 3L
+  ))
+
+  result <- with_mocked_bindings(
+    .fetch_decryption_key(
+      model_id     = "dvt_logistic_v1",
+      n            = 500L,
+      github_token = "github_pat_realtoken1234567890",
+      repo_owner   = "JoieEnsor",
+      repo_name    = "evaluatr-demo-models"
+    ),
+    curl_fetch_memory = function(url, handle) mock_response,
+    .package = "curl"
+  )
+
+  expect_equal(result$encryption_key, dummy_key)
+  expect_equal(result$validation_id, "3")
+})
+
+test_that("bad token + unknown model still surfaces as 401, not 404", {
+  # Worker control flow defers the 404 check until after the auth branch, so
+  # an unauthenticated caller can never distinguish "unknown model" from
+  # "bad token" for a nonexistent model_id. From R's side this just means a
+  # 401 response is treated as an auth error even when the model doesn't
+  # exist.
+  mock_response <- make_curl_response(401, list(
+    error = "GitHub token validation failed: invalid or expired token"
+  ))
+
+  expect_error(
+    with_mocked_bindings(
+      .fetch_decryption_key(
+        model_id     = "no_such_model",
+        n            = 100L,
+        github_token = "bad_token",
+        repo_owner   = "JoieEnsor",
+        repo_name    = "evaluatr_testing_environment"
+      ),
+      curl_fetch_memory = function(url, handle) mock_response,
+      .package = "curl"
+    ),
+    "GitHub token validation failed"
+  )
+})
+
 test_that("key fetch fails with short encryption_key (< 64 chars) from service", {
   mock_response <- make_curl_response(200, list(
     encryption_key = "bad"

@@ -16,7 +16,8 @@
 # using standard survival calibration and discrimination methods.
 #
 # The model is hosted on the public evaluatr demo repository. The token below
-# is a read-only shared PAT for demonstration purposes.
+# is a shared public demo credential (not a real GitHub token) that the key
+# service accepts for demo models only.
 # =============================================================================
 
 library(evaluatr)
@@ -24,7 +25,7 @@ library(evaluatr)
 # ---- Credentials (demo repository) ------------------------------------------
 GITHUB_USERNAME <- "JoieEnsor"
 REPO_NAME       <- "evaluatr-demo-models"
-GITHUB_TOKEN    <- "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"
+GITHUB_TOKEN    <- "evaluatr-demo"
 MODEL_ID        <- "bc_cox_v1"
 
 # ---- Load the breast cancer dataset -----------------------------------------

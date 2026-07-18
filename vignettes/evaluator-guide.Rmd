@@ -74,13 +74,14 @@ dvt_data <- read.csv(dvt_path)
 dvt_val <- dvt_data[dvt_data$study %in% c(6, 7), ]
 
 # Run secure validation against the public evaluatr demo model.
-# The token below is a read-only shared PAT for demonstration purposes only.
-# In real use, the model developer provides you with a private-repo token.
+# The token below is a shared public demo credential (not a real GitHub
+# token) for demonstration purposes only. In real use, the model developer
+# provides you with a private-repo GitHub token.
 result <- secure_model_validation(
   repo_owner      = "JoieEnsor",
   repo_name       = "evaluatr-demo-models",
   model_id        = "dvt_logistic_v1",
-  github_token    = "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",
+  github_token    = "evaluatr-demo",
   validation_data = dvt_val,
   outcome         = "dvt"
 )

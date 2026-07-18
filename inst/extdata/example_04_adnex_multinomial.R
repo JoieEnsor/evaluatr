@@ -16,8 +16,9 @@
 #   5. Secondary metastatic cancer
 #
 # The model is hosted on the public evaluatr demo repository. The token below
-# is a read-only shared PAT for demonstration purposes. In real use, the model
-# developer provides a private-repo token to each evaluator.
+# is a shared public demo credential (not a real GitHub token) that the key
+# service accepts for demo models only. In real use, the model developer
+# provides a private-repo GitHub token to each evaluator.
 # =============================================================================
 
 library(evaluatr)
@@ -25,7 +26,7 @@ library(evaluatr)
 # ---- Credentials (demo repository) ------------------------------------------
 GITHUB_USERNAME <- "JoieEnsor"
 REPO_NAME       <- "evaluatr-demo-models"
-GITHUB_TOKEN    <- "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"
+GITHUB_TOKEN    <- "evaluatr-demo"
 MODEL_ID        <- "adnex_with_v1"
 
 # ---- Load the ADNEX validation dataset --------------------------------------

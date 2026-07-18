@@ -92,7 +92,7 @@ result <- secure_model_validation(
   repo_owner      = "developer-username",
   repo_name       = "my-models",
   model_id        = "dvt_model_v1",
-  github_token    = Sys.getenv("EVALUATR_TOKEN"),
+  github_token    = "EVALUATR_TOKEN",
   validation_data = dvt_val,
   outcome         = "dvt"
 )
@@ -106,7 +106,7 @@ result_by_study <- secure_model_validation(
   repo_owner      = "developer-username",
   repo_name       = "my-models",
   model_id        = "dvt_model_v1",
-  github_token    = Sys.getenv("EVALUATR_TOKEN"),
+  github_token    = "EVALUATR_TOKEN",
   validation_data = dvt_val,
   outcome         = "dvt",
   by              = "study"

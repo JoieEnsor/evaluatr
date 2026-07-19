@@ -32,7 +32,7 @@ while preventing ascertainment of individual predicted probabilities for informi
 
 ```r
 # Requires devtools
-devtools::install_github("JoieEnsor/evaluatr")
+devtools::install_github("JoieEnsor/evaluatr", build_vignettes = TRUE)
 ```
 
 ## Try it now — no developer contact required

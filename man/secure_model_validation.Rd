@@ -86,13 +86,13 @@ dvt_data <- read.csv(dvt_path)
 # Use only studies 6-7 as the external validation set
 dvt_val <- dvt_data[dvt_data$study \%in\% c(6, 7), ]
 
-# Run secure validation
-# Replace the values below with those supplied by the model developer
+# Run secure validation against the public evaluatr demo model. For your
+# own models, replace these values with those supplied by the developer.
 result <- secure_model_validation(
-  repo_owner      = "developer-username",
-  repo_name       = "my-models",
-  model_id        = "dvt_model_v1",
-  github_token    = "EVALUATR_TOKEN",
+  repo_owner      = "JoieEnsor",
+  repo_name       = "evaluatr-demo-models",
+  model_id        = "dvt_logistic_v1",
+  github_token    = "evaluatr-demo",
   validation_data = dvt_val,
   outcome         = "dvt"
 )
@@ -103,10 +103,10 @@ perf$metrics
 
 # Subgroup analysis by study
 result_by_study <- secure_model_validation(
-  repo_owner      = "developer-username",
-  repo_name       = "my-models",
-  model_id        = "dvt_model_v1",
-  github_token    = "EVALUATR_TOKEN",
+  repo_owner      = "JoieEnsor",
+  repo_name       = "evaluatr-demo-models",
+  model_id        = "dvt_logistic_v1",
+  github_token    = "evaluatr-demo",
   validation_data = dvt_val,
   outcome         = "dvt",
   by              = "study"

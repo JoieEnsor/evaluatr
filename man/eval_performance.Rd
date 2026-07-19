@@ -105,10 +105,10 @@ dvt_val  <- read.csv(dvt_path)
 dvt_val  <- dvt_val[dvt_val$study \%in\% c(6, 7), ]
 
 result <- secure_model_validation(
-  repo_owner      = "developer-username",
-  repo_name       = "my-models",
-  model_id        = "dvt_v1",
-  github_token    = Sys.getenv("EVALUATR_TOKEN"),
+  repo_owner      = "JoieEnsor",
+  repo_name       = "evaluatr-demo-models",
+  model_id        = "dvt_logistic_v1",
+  github_token    = "evaluatr-demo",
   validation_data = dvt_val,
   outcome         = "dvt"
 )
@@ -127,10 +127,10 @@ perf$plots$distribution   # predicted probability distribution
 
 # ---- Subgroup evaluation by study -----------------------------------------
 result_by_study <- secure_model_validation(
-  repo_owner      = "developer-username",
-  repo_name       = "my-models",
-  model_id        = "dvt_v1",
-  github_token    = Sys.getenv("EVALUATR_TOKEN"),
+  repo_owner      = "JoieEnsor",
+  repo_name       = "evaluatr-demo-models",
+  model_id        = "dvt_logistic_v1",
+  github_token    = "evaluatr-demo",
   validation_data = dvt_val,
   outcome         = "dvt",
   by              = "study"

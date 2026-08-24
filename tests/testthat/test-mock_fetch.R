@@ -217,7 +217,7 @@ test_that("predictions are correct (match manual LP calculation)", {
   )
 
   lp_expected <- -1 + 0.5 * df$x1 + 0.8 * df$x2
-  p_expected  <- 1 / (1 + exp(-lp_expected))
+  p_expected  <- round(1 / (1 + exp(-lp_expected)), 2)
 
   expect_equal(sort(result$shuffled_predictions), sort(p_expected),
                tolerance = 1e-6)
@@ -309,7 +309,7 @@ test_that("model with intercept=0 and x1 coeff produces correct predictions", {
     fetch_fn = mock_fetch_custom_pred
   )
 
-  p_expected <- 1 / (1 + exp(-(0 + 1 * df$x1)))
+  p_expected <- round(1 / (1 + exp(-(0 + 1 * df$x1))), 2)
   expect_equal(sort(result$shuffled_predictions), sort(p_expected),
                tolerance = 1e-6)
 })
@@ -411,7 +411,9 @@ test_that("multinomial predictions are valid probabilities summing to 1", {
 
   pm <- result$prediction_matrix
   expect_true(all(pm >= 0 & pm <= 1))
-  expect_equal(rowSums(pm), rep(1, nrow(pm)), tolerance = 1e-10)
+  # Each category is rounded to 2dp independently at the prediction chokepoint,
+  # so row sums are close to but not exactly 1.
+  expect_equal(rowSums(pm), rep(1, nrow(pm)), tolerance = 0.02)
 })
 
 test_that("multinomial predictions match manual softmax (after sorting)", {
@@ -430,11 +432,11 @@ test_that("multinomial predictions match manual softmax (after sorting)", {
 
   # Predictions are shuffled — compare sorted reference-category column
   expect_equal(sort(result$prediction_matrix[, "reference"]),
-               sort(expected[, "reference"]), tolerance = 1e-6)
+               sort(round(expected[, "reference"], 2)), tolerance = 1e-6)
   expect_equal(sort(result$prediction_matrix[, "cat_B"]),
-               sort(expected[, "cat_B"]), tolerance = 1e-6)
+               sort(round(expected[, "cat_B"], 2)), tolerance = 1e-6)
   expect_equal(sort(result$prediction_matrix[, "cat_C"]),
-               sort(expected[, "cat_C"]), tolerance = 1e-6)
+               sort(round(expected[, "cat_C"], 2)), tolerance = 1e-6)
 })
 
 test_that("multinomial output does NOT contain shuffled_predictions (binary field)", {

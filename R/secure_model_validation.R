@@ -181,11 +181,31 @@ secure_model_validation <- function(repo_owner, repo_name, model_id,
     stop("Validation data must have at least 50 observations.")
   }
 
+  if (!is.null(by) && (!is.character(by) || length(by) != 1)) {
+    stop("'by' must be a single character string naming a column in validation_data.")
+  }
+
+  predictor_cols <- setdiff(names(validation_data), c(outcome, by))
+  predictors     <- validation_data[, predictor_cols, drop = FALSE]
+
+  if (nrow(unique(predictors)) == 1) {
+    stop("Validation data must not have identical predictor values across ",
+         "all rows. This dataset could be used to isolate individual ",
+         "predicted probabilities rather than assess model performance.")
+  }
+
+  row_keys   <- do.call(paste, c(predictors, sep = "\r"))
+  key_counts <- table(row_keys)
+
+  if (length(key_counts) == 2 && any(key_counts == 1)) {
+    stop("Validation data must not consist of a single outlier row against ",
+         "an otherwise identical majority. This dataset could be used to ",
+         "isolate individual predicted probabilities rather than assess ",
+         "model performance.")
+  }
+
   # ---- Validate 'by' parameter ------------------------------------------------
   if (!is.null(by)) {
-    if (!is.character(by) || length(by) != 1) {
-      stop("'by' must be a single character string naming a column in validation_data.")
-    }
     if (!by %in% names(validation_data)) {
       stop("Variable '", by, "' not found in validation_data.")
     }

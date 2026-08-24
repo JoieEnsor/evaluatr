@@ -335,7 +335,7 @@ test_that("logistic regression (non-obfuscated) predictions match manual R calcu
 
   # Manual computation
   lp_expected <- -1.25 + 0.02 * df$age + 0.8 * df$biomarker_score
-  p_expected  <- 1 / (1 + exp(-lp_expected))
+  p_expected  <- round(1 / (1 + exp(-lp_expected)), 2)
 
   expect_equal(sort(result$shuffled_predictions), sort(p_expected), tolerance = 1e-6)
 })
@@ -447,9 +447,9 @@ test_that("Cox PH predictions match manual calculation (non-obfuscated)", {
   s0   <- c(0.95, 0.90, 0.80)
   # S(t) = S0(t)^exp(LP)
   exp_lp <- exp(lp)
-  p_t1 <- s0[1]^exp_lp
-  p_t2 <- s0[2]^exp_lp
-  p_t3 <- s0[3]^exp_lp
+  p_t1 <- round(s0[1]^exp_lp, 2)
+  p_t2 <- round(s0[2]^exp_lp, 2)
+  p_t3 <- round(s0[3]^exp_lp, 2)
 
   # Compare sorted to account for shuffling
   expect_equal(sort(result$prediction_matrix[, 1]), sort(p_t1), tolerance = 1e-5)
@@ -484,9 +484,9 @@ test_that("Weibull AFT predictions match manual calculation (non-obfuscated)", {
   scale <- exp(lp)
   shape <- 1.5
   tv    <- c(1, 3, 5)
-  p_t1  <- exp(-(tv[1] / scale)^shape)
-  p_t2  <- exp(-(tv[2] / scale)^shape)
-  p_t3  <- exp(-(tv[3] / scale)^shape)
+  p_t1  <- round(exp(-(tv[1] / scale)^shape), 2)
+  p_t2  <- round(exp(-(tv[2] / scale)^shape), 2)
+  p_t3  <- round(exp(-(tv[3] / scale)^shape), 2)
 
   expect_equal(sort(result$prediction_matrix[, 1]), sort(p_t1), tolerance = 1e-5)
   expect_equal(sort(result$prediction_matrix[, 2]), sort(p_t2), tolerance = 1e-5)
@@ -506,7 +506,9 @@ test_that("multinomial predictions are valid probabilities (row sums = 1)", {
 
   pm <- result$prediction_matrix
   expect_equal(ncol(pm), 3) # reference + cat_B + cat_C
-  expect_equal(rowSums(pm), rep(1, nrow(pm)), tolerance = 1e-8)
+  # Each category is rounded to 2dp independently at the prediction chokepoint,
+  # so row sums are close to but not exactly 1.
+  expect_equal(rowSums(pm), rep(1, nrow(pm)), tolerance = 0.02)
 })
 
 test_that("multinomial predictions match manual softmax (non-obfuscated)", {
@@ -519,9 +521,9 @@ test_that("multinomial predictions match manual softmax (non-obfuscated)", {
   z_B   <- -0.5 + 0.3 * df$x1 + 0.2 * df$x2
   z_C   <-  0.5 + 0.1 * df$x1 - 0.4 * df$x2
   denom <- 1 + exp(z_B) + exp(z_C)
-  p_ref <- 1        / denom
-  p_B   <- exp(z_B) / denom
-  p_C   <- exp(z_C) / denom
+  p_ref <- round(1        / denom, 2)
+  p_B   <- round(exp(z_B) / denom, 2)
+  p_C   <- round(exp(z_C) / denom, 2)
 
   pm <- result$prediction_matrix
   # Column 1 = reference; 2 = cat_B; 3 = cat_C

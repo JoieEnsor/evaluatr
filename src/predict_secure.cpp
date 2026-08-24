@@ -1000,7 +1000,7 @@ List predict_from_encoded_cpp(std::string encoded_content,
   }
   for (int i = 0; i < n; i++) {
     for (int c = 0; c < pred_matrix.ncol(); c++) {
-      shuffled_pred(i, c) = pred_matrix(indices[i], c);
+      shuffled_pred(i, c) = std::round(pred_matrix(indices[i], c) * 100.0) / 100.0;
     }
   }
 

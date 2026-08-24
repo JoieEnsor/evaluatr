@@ -65,6 +65,60 @@ test_that("validation_data must have at least 50 observations", {
   )
 })
 
+test_that("validation_data must not have identical predictor values across all rows", {
+  df <- data.frame(x = rep(1, 50), outcome = rbinom(50, 1, 0.5))
+
+  expect_error(
+    secure_model_validation(
+      repo_owner = "owner", repo_name = "repo", model_id = "id",
+      github_token = "tok", validation_data = df,
+      outcome = "outcome"
+    ),
+    "identical predictor values"
+  )
+})
+
+test_that("validation_data must not consist of a single outlier row against an identical majority", {
+  df <- data.frame(x = c(rep(1, 49), 2), outcome = rbinom(50, 1, 0.5))
+
+  expect_error(
+    secure_model_validation(
+      repo_owner = "owner", repo_name = "repo", model_id = "id",
+      github_token = "tok", validation_data = df,
+      outcome = "outcome"
+    ),
+    "single outlier row"
+  )
+})
+
+test_that("datasets with more than 2 distinct predictor patterns pass the duplicate-row checks", {
+  df <- data.frame(x = c(rep(1, 20), rep(2, 20), rep(3, 10)),
+                   outcome = rbinom(50, 1, 0.5))
+
+  expect_error(
+    secure_model_validation(
+      repo_owner = "owner", repo_name = "repo", model_id = "id",
+      github_token = "fake_token", validation_data = df,
+      outcome = "outcome"
+    ),
+    "CURL error|HTTP error|Model not found|Authentication failed"
+  )
+})
+
+test_that("an even split across exactly 2 distinct predictor patterns passes the duplicate-row checks", {
+  df <- data.frame(x = c(rep(1, 25), rep(2, 25)),
+                   outcome = rbinom(50, 1, 0.5))
+
+  expect_error(
+    secure_model_validation(
+      repo_owner = "owner", repo_name = "repo", model_id = "id",
+      github_token = "fake_token", validation_data = df,
+      outcome = "outcome"
+    ),
+    "CURL error|HTTP error|Model not found|Authentication failed"
+  )
+})
+
 test_that("'by' must be a single character string naming a column", {
   df <- data.frame(x = rnorm(50), outcome = rbinom(50, 1, 0.5),
                    group = rep(c("A", "B"), 25))

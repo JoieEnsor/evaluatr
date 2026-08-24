@@ -416,9 +416,10 @@ test_that("round-trip multinomial: JSON decrypts and produces valid predictions"
   cpp_preds <- pred_result$prediction_matrix
   expect_equal(nrow(cpp_preds), n)
   expect_equal(ncol(cpp_preds), 3L)  # reference + 2 categories
-  # Row probabilities must sum to 1
+  # Row probabilities are rounded to 2dp independently at the prediction
+  # chokepoint, so they sum close to but not exactly 1.
   row_sums <- rowSums(cpp_preds)
-  expect_true(all(abs(row_sums - 1) < 1e-6))
+  expect_true(all(abs(row_sums - 1) < 0.02))
 })
 
 

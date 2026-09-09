@@ -1,4 +1,4 @@
-# evaluatr: A system for independent evaluation of clinical prediction models while preserving intellectual property and data privacy
+# evaluatr: Secure Independent Evaluation of Clinical Prediction Models
 # Core validation function -- v0.1.0
 
 # Helper operator (internal)

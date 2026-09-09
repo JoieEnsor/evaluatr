@@ -1,0 +1,350 @@
+# Guide for Model Developers
+
+## Overview
+
+This guide explains how to make your model available for independent
+external validation using evaluatr. Independent evaluators will be able
+to run
+[`secure_model_validation()`](https://joieensor.github.io/evaluatr/reference/secure_model_validation.md)
+in their own datasets, without you ever seeing their patient data and
+without them ever seeing your model’s coefficients.
+
+You will need:
+
+1.  A **private GitHub repository** to host the model specification file
+2.  The **evaluatr package** installed locally to generate that file
+3.  A **developer account** — just your GitHub username
+
+This takes approximately 30 minutes to set up for the first model, and
+much less for subsequent ones.
+
+------------------------------------------------------------------------
+
+## Step 1: Create a private GitHub repository
+
+If you do not already have a GitHub account, create one at
+[github.com](https://github.com). Then create a new repository:
+
+- Set the visibility to **Private**
+- Choose a clear, memorable name (e.g. `my-clinical-models`)
+- Do not initialise with a README
+
+Your repository will hold one or more model specifications. The required
+folder structure is:
+
+    my-clinical-models/
+    ├── model_v1/
+    │   └── model_v1_specification.json
+    └── model_v2/
+        └── model_v2_specification.json
+
+The folder name (e.g. `model_v1`) becomes the `model_id` that evaluators
+will use. The specification file must be named
+`{model_id}_specification.json`.
+
+------------------------------------------------------------------------
+
+## Step 2: Install evaluatr and generate your model specification
+
+The
+[`register_model()`](https://joieensor.github.io/evaluatr/reference/register_model.md)
+function creates the protected model specification file and registers
+the model with the evaluatr registry. Both steps happen in a single call
+and must complete before any evaluator can validate the model.
+
+``` r
+
+devtools::install_github("JoieEnsor/evaluatr")
+library(evaluatr)
+```
+
+### Example A: Logistic regression (DVT diagnosis model)
+
+The DVT example dataset included with the package spans seven studies.
+Studies 1-5 are used here for model development; studies 6-7 are
+reserved for external validation.
+
+``` r
+
+dvt_path <- system.file("extdata", "dvt_example.csv", package = "evaluatr")
+dvt_data <- read.csv(dvt_path)
+
+# Development set: studies 1-5
+dvt_dev <- dvt_data[dvt_data$study %in% 1:5, ]
+
+# Fit a logistic regression model
+dvt_fit <- glm(dvt ~ male + ab_ddimer + calf_diff + vein_distension +
+                     malignancy + immobile,
+               data = dvt_dev, family = binomial)
+
+# Generate the protected model specification file
+register_model(
+  model           = dvt_fit,
+  model_id        = "dvt_v1",
+  developer_id    = "your-github-username",    # your GitHub username
+  model_name      = "DVT Diagnosis Model v1",
+  description     = paste(
+    "Logistic regression for DVT diagnosis. Developed in studies 1-5",
+    "of the simulated DVT example dataset.",
+    "Predictors: male, ab_ddimer, calf_diff, vein_distension, malignancy, immobile."
+  ),
+  developer_name  = "Your Name",
+  developer_email = "you@institution.ac.uk",
+  output_dir      = "dvt_v1"
+)
+```
+
+This writes `dvt_v1/dvt_v1_specification.json`. The coefficient values
+are protected; the file is safe to host in your GitHub repository.
+
+### Example B: Cox proportional hazards model (breast cancer relapse)
+
+``` r
+
+library(survival)
+
+bc_path <- system.file("extdata", "bc_survival_example.csv",
+                       package = "evaluatr")
+bc_data <- read.csv(bc_path)
+bc_dev  <- bc_data[bc_data$val == 0, ]
+
+# Fit a Cox model
+cox_fit <- coxph(Surv(rf, rfi) ~ age + nodes + pr + er + hormon,
+                 data = bc_dev, x = TRUE)
+
+# Extract baseline survival at 5 and 10 years (60 and 120 months)
+bh     <- basehaz(cox_fit, centered = FALSE)
+S0_60  <- exp(-bh$hazard[which.min(abs(bh$time - 60))])
+S0_120 <- exp(-bh$hazard[which.min(abs(bh$time - 120))])
+
+register_model(
+  model            = cox_fit,
+  model_id         = "bc_cox_v1",
+  developer_id     = "your-github-username",
+  model_name       = "Breast Cancer Relapse-Free Survival Model",
+  description      = paste(
+    "Cox PH model for relapse-free survival in breast cancer.",
+    "Developed in the training set (val == 0) of the bc_survival_example dataset.",
+    "Predictors: age, nodes, pr, er, hormon."
+  ),
+  model_parameters = list(
+    timepoints        = c(60, 120),
+    baseline_survival = c(S0_60, S0_120)
+  ),
+  developer_name  = "Your Name",
+  developer_email = "you@institution.ac.uk",
+  output_dir      = "bc_cox_v1"
+)
+```
+
+For Cox models, `model_parameters` must include `timepoints` and
+`baseline_survival` so that evaluatr can produce predicted survival
+probabilities at specific time-points.
+
+### Example C: Model with embedded pre-processing
+
+If your model uses derived or transformed predictors, you can embed the
+transformation so that evaluators provide raw data with no additional
+steps required on their side. Supply an R code string as the
+`preprocessing` argument:
+
+``` r
+
+# A Cox model using log-transformed pr and er
+cox_log_fit <- coxph(Surv(rf, rfi) ~ age + nodes + log(pr + 1) + log(er + 1),
+                     data = bc_dev, x = TRUE)
+
+bh2     <- basehaz(cox_log_fit, centered = FALSE)
+S0_60b  <- exp(-bh2$hazard[which.min(abs(bh2$time - 60))])
+S0_120b <- exp(-bh2$hazard[which.min(abs(bh2$time - 120))])
+
+register_model(
+  model            = cox_log_fit,
+  model_id         = "bc_cox_log_v1",
+  developer_id     = "your-github-username",
+  model_name       = "BC Survival Model (log biomarkers)",
+  preprocessing    = "
+    validation_data$`log(pr + 1)` <- log(validation_data$pr + 1)
+    validation_data$`log(er + 1)` <- log(validation_data$er + 1)
+  ",
+  model_parameters = list(
+    timepoints        = c(60, 120),
+    baseline_survival = c(S0_60b, S0_120b)
+  ),
+  developer_name  = "Your Name",
+  developer_email = "you@institution.ac.uk",
+  output_dir      = "bc_cox_log_v1"
+)
+```
+
+The preprocessing code is run on `validation_data` (the evaluator’s
+dataset) before prediction. The code must create any derived columns in
+place. It has access only to `validation_data`.
+
+If you do not embed preprocessing, the variable names in `variables` (or
+the coefficient names extracted from your model) must match the column
+names the evaluator will have in their dataset. Document any required
+transformations clearly in the model description.
+
+### Example D: Manual coefficient specification
+
+If your coefficients come from a publication or software other than R,
+you can supply them directly:
+
+``` r
+
+register_model(
+  coefficients = c("(Intercept)" = -3.2,
+                   ab_ddimer     =  1.8,
+                   calf_diff     =  1.1,
+                   vein_distension = 0.9),
+  model_type   = "logistic",
+  model_id     = "dvt_published_v1",
+  developer_id = "your-github-username",
+  model_name   = "Published DVT Score (manual)",
+  outcome_type = "binary",
+  variables    = c("ab_ddimer", "calf_diff", "vein_distension"),
+  description  = "Coefficients from Smith et al. (2024), Table 2.",
+  developer_name  = "Your Name",
+  developer_email = "you@institution.ac.uk",
+  output_dir   = "dvt_published_v1"
+)
+```
+
+### Keeping a model private while a paper is under review
+
+Set `public_listing = FALSE` to register the model without it appearing
+in the public directory. You can still issue tokens to peer reviewers or
+journal editors. Update to `public_listing = TRUE` by re-running
+[`register_model()`](https://joieensor.github.io/evaluatr/reference/register_model.md)
+with a new `model_id` when ready to publish.
+
+------------------------------------------------------------------------
+
+## Step 3: Verify your model specification
+
+Before sharing with any evaluator, confirm that evaluatr’s predictions
+match your own. Because
+[`secure_model_validation()`](https://joieensor.github.io/evaluatr/reference/secure_model_validation.md)
+returns shuffled predictions, sort both sets before comparing:
+
+``` r
+
+# Validate in your own development data using your own full-access PAT
+result_check <- secure_model_validation(
+  repo_owner      = "your-github-username",
+  repo_name       = "my-clinical-models",
+  model_id        = "dvt_v1",
+  github_token    = Sys.getenv("GITHUB_PAT"),   # your own full-access PAT
+  validation_data = dvt_dev,
+  outcome         = "dvt"
+)
+
+# Your own predictions (unsorted)
+manual_probs <- predict(dvt_fit, type = "response")
+
+# Sort both and compare
+max(abs(sort(manual_probs) - sort(result_check$shuffled_predictions)))
+# Should be < 1e-6
+```
+
+A difference larger than `1e-4` indicates a coefficient or
+transformation mismatch. Check variable names and ordering carefully.
+
+------------------------------------------------------------------------
+
+## Step 4: Upload to GitHub
+
+Upload the generated file to your private repository at the path:
+
+    <model_id>/<model_id>_specification.json
+
+For example, for `model_id = "dvt_v1"`:
+
+    my-clinical-models/
+    └── dvt_v1/
+        └── dvt_v1_specification.json
+
+You can do this via the GitHub web interface (drag and drop into the
+correct folder) or using the command line:
+
+``` bash
+git add dvt_v1/dvt_v1_specification.json
+git commit -m "Add DVT v1 model specification"
+git push
+```
+
+------------------------------------------------------------------------
+
+## Step 5: Issue access tokens to evaluators
+
+For each evaluator (or group of evaluators), create a fine-grained
+personal access token:
+
+1.  Go to GitHub → Settings → Developer settings → Personal access
+    tokens → Fine-grained tokens
+2.  Click **Generate new token**
+3.  Under **Repository access**, select **Only select repositories** and
+    choose your model repository
+4.  Under **Permissions**, set **Contents** to **Read-only** (no other
+    permissions are needed)
+5.  Set an appropriate **Expiration** — we recommend a short-lived token
+6.  Generate and copy the token
+
+Send the token to the evaluator along with your GitHub username,
+repository name, and model ID.
+
+**Issue a unique token per evaluator.** This lets you revoke access for
+a specific evaluator without affecting others and creates an audit trail
+of who has accessed the model specification.
+
+------------------------------------------------------------------------
+
+## Repository structure summary
+
+    my-clinical-models/                          ← private GitHub repository
+    ├── dvt_v1/
+    │   └── dvt_v1_specification.json            ← model_id = "dvt_v1"
+    └── bc_cox_v1/
+        └── bc_cox_v1_specification.json          ← model_id = "bc_cox_v1"
+
+The evaluator calls:
+
+``` r
+
+secure_model_validation(
+  repo_owner      = "your-github-username",
+  repo_name       = "my-clinical-models",
+  model_id        = "dvt_v1",
+  github_token    = "token_you_issued",
+  validation_data = their_data,
+  outcome         = "dvt"
+)
+```
+
+------------------------------------------------------------------------
+
+## Checklist before sharing with evaluators
+
+[`register_model()`](https://joieensor.github.io/evaluatr/reference/register_model.md)
+ran without errors and printed a confirmation message
+
+Manual verification confirms predictions match those from the original
+model object (difference \< 1e-4)
+
+Specification file is uploaded to the correct path:
+`<model_id>/<model_id>_specification.json`
+
+Repository visibility is set to **Private** if necessary
+
+Access token has read-only Contents scope and appropriate expiration
+
+Evaluator has been told:
+
+- Your GitHub username (`repo_owner`)
+- The repository name (`repo_name`)
+- The model ID (`model_id`)
+- Which variables their dataset must contain (`variables` field in the
+  model description)
+- Any transformations they need to apply (if not embedded in
+  preprocessing)

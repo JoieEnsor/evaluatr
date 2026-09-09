@@ -4,7 +4,7 @@
 \name{evaluatr-package}
 \alias{evaluatr}
 \alias{evaluatr-package}
-\title{evaluatr: Secure Independent Evaluation of Clinical Prediction Models}
+    itle{evaluatr: Secure Independent Evaluation of Clinical Prediction Models}
 \description{
 The \pkg{evaluatr} package implements a two-component system for
 independent external validation of clinical prediction algorithms,

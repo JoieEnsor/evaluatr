@@ -1,0 +1,301 @@
+# Guide for Evaluators
+
+## Overview
+
+The **evaluatr** package allows you to independently evaluate a clinical
+prediction model in your own dataset, without the model developer ever
+seeing your patient data. This guide walks you through the complete
+workflow from installation to performance reporting.
+
+The system works as follows. The model developer stores their model
+specification in a private GitHub repository. You use evaluatr to
+retrieve those specifications and compute predictions entirely within
+your own R session. Your patient data never leaves your computer.
+
+## Installation
+
+``` r
+
+devtools::install_github("JoieEnsor/evaluatr")
+library(evaluatr)
+```
+
+## Finding available models
+
+Use
+[`list_registered_models()`](https://joieensor.github.io/evaluatr/reference/list_registered_models.md)
+to browse publicly registered models and find the developer contact for
+requesting access:
+
+``` r
+
+models <- list_registered_models()
+print(models[, c("model_id", "model_name", "developer_email")])
+```
+
+## What the developer will send you
+
+Once a developer has agreed to grant you access, they will send you four
+pieces of information:
+
+1.  Their **GitHub username** — identifies the account hosting the model
+2.  The **repository name** — the name of the private repository
+3.  The **model ID** — a short identifier matching a folder in the
+    repository (e.g. `"dvt_model_v1"`)
+4.  A **time-limited access token** — a fine-grained GitHub personal
+    access token giving read-only access to their repository
+
+Pass the token directly into the function call as shown in the examples
+below.
+
+------------------------------------------------------------------------
+
+## Example 1: Basic whole-dataset evaluation
+
+This example uses the DVT diagnosis dataset included with the package,
+validated against a logistic regression model hosted on the public
+evaluatr demo repository. It illustrates the complete evaluatr workflow
+for a binary outcome model, and you can run it yourself exactly as
+written — no developer contact required.
+
+``` r
+
+library(evaluatr)
+
+# Load the DVT example dataset
+dvt_path <- system.file("extdata", "dvt_example.csv", package = "evaluatr")
+dvt_data <- read.csv(dvt_path)
+
+# Use studies 6 and 7 as the external validation set
+# (studies 1-5 were used for model development)
+dvt_val <- dvt_data[dvt_data$study %in% c(6, 7), ]
+
+# Run secure validation against the public evaluatr demo model.
+# The token below is a shared public demo credential (not a real GitHub
+# token) for demonstration purposes only. In real use, the model developer
+# provides you with a private-repo GitHub token.
+result <- secure_model_validation(
+  repo_owner      = "JoieEnsor",
+  repo_name       = "evaluatr-demo-models",
+  model_id        = "dvt_logistic_v1",
+  github_token    = "evaluatr-demo",
+  validation_data = dvt_val,
+  outcome         = "dvt"
+)
+```
+
+The `result` object contains a shuffled prediction-outcome matrix. The
+shuffling means that predictions cannot be matched back to individual
+patient rows, which ensures the package cannot be used to generate
+predictions for individual patients in clinical practice.
+
+``` r
+
+# Compute performance metrics
+performance <- eval_performance(
+  validation_result    = result,
+  generate_plots       = TRUE,
+  confidence_intervals = TRUE,
+  n_boot               = 50,      # low here for illustration purposes
+  decision_threshold   = 0.15     # set to the clinically relevant threshold
+)
+
+# View the metrics table
+performance$metrics
+
+# Access individual diagnostic plots
+performance$plots$calibration      # calibration plot
+performance$plots$decision_curve   # decision curve analysis
+performance$plots$distribution     # predicted probability distributions
+```
+
+The metrics table includes the following:
+
+| Domain              | Metrics                                               |
+|---------------------|-------------------------------------------------------|
+| Discrimination      | AUROC / c-statistic                                   |
+| Calibration         | Intercept, slope, ICI, ECI, ECE, O:E ratio            |
+| Overall performance | Brier score, Nagelkerke R², Cox-Snell R², McFadden R² |
+| Clinical utility    | Net benefit, standardised net benefit                 |
+
+------------------------------------------------------------------------
+
+## Example 2: Subgroup evaluation
+
+Many validation studies assess model performance separately within
+clinically relevant subgroups, such as sex, age group, or recruitment
+site. evaluatr supports this through the `by` argument.
+
+The workflow has two stages. First, pass `by` to
+[`secure_model_validation()`](https://joieensor.github.io/evaluatr/reference/secure_model_validation.md)
+so that the subgroup label is retained alongside each shuffled
+prediction. Second, pass `result$shuffled_by` to
+[`eval_performance()`](https://joieensor.github.io/evaluatr/reference/eval_performance.md)
+to obtain separate metrics per subgroup.
+
+``` r
+
+# Stage 1 — run validation retaining study labels
+result_by_study <- secure_model_validation(
+  repo_owner      = "developer-username",
+  repo_name       = "my-models",
+  model_id        = "dvt_v1",
+  github_token    = "token_provided_by_developer",
+  validation_data = dvt_val,
+  outcome         = "dvt",
+  by              = "study"     # column name in your dataset
+)
+
+# Stage 2 — compute metrics separately per study
+performance_by_study <- eval_performance(
+  validation_result    = result_by_study,
+  generate_plots       = TRUE,
+  confidence_intervals = TRUE,
+  n_boot               = 50,      # low here for illustration purposes
+  decision_threshold   = 0.15,
+  by                   = result_by_study$shuffled_by
+)
+
+# The metrics table now has a Subgroup column
+performance_by_study$metrics
+
+# Plots are organised by subgroup level
+performance_by_study$plots[["6"]]$calibration   # study 6
+performance_by_study$plots[["7"]]$calibration   # study 7
+```
+
+Each subgroup must contain at least 50 observations. If any subgroup is
+smaller than this,
+[`secure_model_validation()`](https://joieensor.github.io/evaluatr/reference/secure_model_validation.md)
+will return an informative error before any predictions are computed.
+
+------------------------------------------------------------------------
+
+## Example 3: Models requiring pre-processed variables
+
+Some models are developed using transformed or derived variables — for
+example, an age-squared term or a log-transformed biomarker. How you
+handle this depends on whether the developer has embedded the
+transformation in their model specification.
+
+### When you need to pre-process (developer specifies transformed variable names)
+
+If the model requires a variable named `log_pr` (log-progesterone), you
+will need to create that column in your dataset before calling
+[`secure_model_validation()`](https://joieensor.github.io/evaluatr/reference/secure_model_validation.md).
+The developer should document which transformations are required in
+their publication or access token communication.
+
+``` r
+
+bc_path <- system.file("extdata", "bc_survival_example.csv",
+                       package = "evaluatr")
+bc_val  <- read.csv(bc_path)
+bc_val  <- bc_val[bc_val$val == 1, ]
+
+# Create the required derived variable
+bc_val$log_pr <- log(bc_val$pr + 1)
+
+# Now run validation
+result_bc <- secure_model_validation(
+  repo_owner      = "developer-username",
+  repo_name       = "my-models",
+  model_id        = "bc_cox_v1",
+  github_token    = "token_provided_by_developer",
+  validation_data = bc_val,
+  outcome         = "rfi"
+)
+```
+
+### When the developer handles pre-processing automatically
+
+Developers can embed transformation code directly in their model
+specification. In this case, you provide the raw data and evaluatr
+handles the rest — no additional steps are required on your side.
+
+``` r
+
+# No pre-processing needed — the developer's specification handles it
+result_autoprepro <- secure_model_validation(
+  repo_owner      = "developer-username",
+  repo_name       = "my-models",
+  model_id        = "bc_cox_auto_v1",
+  github_token    = "token_provided_by_developer",
+  validation_data = bc_val,    # raw pr provided as-is
+  outcome         = "rfi"
+)
+```
+
+The two approaches produce identical predictions; the difference is
+purely in who applies the transformation.
+
+------------------------------------------------------------------------
+
+## More examples: other outcome types
+
+The examples above focus on binary outcomes and general workflow
+concepts. The public evaluatr demo repository also hosts models covering
+the other outcome types evaluatr supports. Runnable scripts for each are
+included with the package under
+`system.file("extdata", package = "evaluatr")`:
+
+| Script | Model type | Outcome |
+|----|----|----|
+| `example_01_dvt_logistic.R` | Logistic regression | Binary (DVT diagnosis) |
+| `example_02_bc_cox.R` | Cox proportional hazards | Survival (breast cancer relapse) |
+| `example_03_bc_weibull.R` | Weibull AFT | Survival (breast cancer relapse) |
+| `example_04_adnex_multinomial.R` | Multinomial logistic regression | 5-category (ADNEX ovarian mass classification) |
+
+Each script uses the same public demo repository and read-only token as
+Example 1 above, so they can be run as-is. The survival and multinomial
+scripts also include independent manual verification of the predictions
+against a locally-fit reference model.
+
+------------------------------------------------------------------------
+
+## Minimum dataset requirements
+
+| Requirement | Value |
+|----|----|
+| Minimum total observations | 50 |
+| Minimum per subgroup (when using `by`) | 50 |
+| Outcome variable type for [`eval_performance()`](https://joieensor.github.io/evaluatr/reference/eval_performance.md) | Binary (0/1) in the current release. Survival and multinomial predictions can be computed with evaluatr, but performance metrics for these outcome types must currently be calculated independently by the evaluator; full support in [`eval_performance()`](https://joieensor.github.io/evaluatr/reference/eval_performance.md) is planned for a future release. |
+
+These thresholds exist to prevent the package from being used to obtain
+predictions for individual patients.
+
+------------------------------------------------------------------------
+
+## Security and data privacy
+
+- **Your patient data never leaves your R session.** No data is
+  transmitted to GitHub or to the model developer.
+- **Predictions are shuffled** before being returned, so they cannot be
+  matched back to individual patient rows.
+- **Every validation run is logged** by the evaluatr registry, creating
+  an audit trail. Access tokens can be revoked by the developer at any
+  time.
+- The package is designed exclusively for **retrospective evaluation
+  studies**. It must not be used to generate predictions that inform
+  care for individual patients.
+
+------------------------------------------------------------------------
+
+## Getting help
+
+If you encounter problems, check the following:
+
+- The token provided by the developer has not expired.
+- Your dataset contains all the variable names listed in the developer’s
+  documentation.
+- If using
+  [`eval_performance()`](https://joieensor.github.io/evaluatr/reference/eval_performance.md),
+  check that the outcome variable is coded as 0/1 for binary outcomes.
+- The `model_id`, `repo_owner`, and `repo_name` all match exactly what
+  the developer provided (these are case-sensitive).
+
+See
+[`?secure_model_validation`](https://joieensor.github.io/evaluatr/reference/secure_model_validation.md)
+and
+[`?eval_performance`](https://joieensor.github.io/evaluatr/reference/eval_performance.md)
+for full argument documentation.

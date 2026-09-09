@@ -1,6 +1,7 @@
 # evaluatr
 
 <!-- badges: start -->
+[![R-CMD-check](https://github.com/JoieEnsor/evaluatr/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/JoieEnsor/evaluatr/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 **evaluatr** enables independent external validation of clinical prediction
@@ -111,6 +112,7 @@ perf$metrics
   a validation against someone else's model
 - `vignette("developer-guide", package = "evaluatr")` — for developers
   registering their own model with the evaluatr key service
+- [Pkgdown setup guide](PKGDOWN.md) — for maintaining and publishing the website
 
 ## Citing evaluatr
 

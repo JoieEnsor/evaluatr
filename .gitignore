@@ -24,3 +24,4 @@ tests/testthat/Rplots.pdf
 # Vignette build artefacts
 vignettes/*.log
 vignettes/*.R
+PKGDOWN.md

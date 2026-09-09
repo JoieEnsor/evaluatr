@@ -2,7 +2,18 @@ Package: evaluatr
 Title: Secure Independent Evaluation of Clinical Prediction Models
 Version: 0.1.0
 Authors@R: 
-    person("Joie", "Ensor", email = "j.ensor@bham.ac.uk", role = c("aut", "cre"))
+    c(
+         person("Joie", "Ensor", email = "j.ensor@bham.ac.uk", role = c("aut", "cre"),
+             comment = c(ORCID = "0000-0001-7481-0282")),
+     person("Ben", "Van Calster", role = "aut",
+         comment = c(ORCID = "0000-0003-1613-7450")),
+        person("Lasai", "Barreñada", role = "aut",
+         comment = c(ORCID = "0000-0001-8020-0210")),
+     person("Laure", "Wynants", role = "aut",
+         comment = c(ORCID = "0000-0002-3037-122X")),
+     person("Benjamin I.", "Perry", role = "aut",
+         comment = c(ORCID = "0000-0002-1533-026X"))
+    )
 Description: Provides a two-component system for independent evaluation of clinical
     prediction models while preserving commercial viability and data sovereignty.
     Evaluators can retrieve model specifications from a developer's private GitHub
@@ -14,7 +25,6 @@ License: GPL (>= 3)
 SystemRequirements: libcurl
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Depends:
     R (>= 4.1.0)
 Imports:
@@ -38,5 +48,6 @@ Suggests:
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Config/Needs/website: rmarkdown
-URL: https://github.com/JoieEnsor/evaluatr
+URL: https://joieensor.github.io/evaluatr/, https://github.com/JoieEnsor/evaluatr
 BugReports: https://github.com/JoieEnsor/evaluatr/issues
+Config/roxygen2/version: 8.0.0

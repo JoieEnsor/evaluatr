@@ -58,7 +58,7 @@
 #' }
 #'
 #' @references
-#' Ensor J, Van Calster B, Wynants L, Perry BI. *A system for independent
+#' Ensor J, Van Calster B, Barreñada L, Wynants L, Perry BI. *A system for independent
 #' evaluation of clinical predictive algorithms while preserving
 #' implementation viability.* (manuscript in preparation)
 #'

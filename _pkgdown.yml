@@ -1,0 +1,49 @@
+url: https://joieensor.github.io/evaluatr/
+
+template:
+  bootstrap: 5
+
+navbar:
+  structure:
+    left: [reference, articles, news]
+    right: [github]
+  components:
+    articles:
+      text: Guides
+      menu:
+        - text: Guide for Evaluators
+          href: articles/evaluator-guide.html
+        - text: Guide for Model Developers
+          href: articles/developer-guide.html
+    github:
+      icon: fab fa-github
+      href: https://github.com/JoieEnsor/evaluatr
+      aria-label: GitHub repository
+
+reference:
+  - title: Secure validation
+    desc: Retrieve model specifications and generate predictions without exposing model coefficients or patient data.
+    contents:
+      - secure_model_validation
+      - list_registered_models
+      - register_model
+  - title: Performance evaluation
+    desc: Calculate performance metrics and diagnostic plots from validation results.
+    contents:
+      - eval_performance
+  - title: Example datasets
+    desc: Datasets used in the package examples and guides.
+    contents:
+      - adnex_sample
+      - bc_survival_example
+      - dvt_example
+  - title: Package
+    contents:
+      - evaluatr-package
+
+articles:
+  - title: Guides
+    navbar: Guides
+    contents:
+      - evaluator-guide
+      - developer-guide

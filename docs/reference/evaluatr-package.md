@@ -1,4 +1,4 @@
-# 
+# evaluatr: Secure Independent Evaluation of Clinical Prediction Models
 
 The evaluatr package implements a two-component system for independent
 external validation of clinical prediction algorithms, designed to
@@ -62,13 +62,15 @@ Three example datasets are included with the package:
 
 ## References
 
-Ensor J, Van Calster B, Wynants L, Perry BI. *A system for independent
-evaluation of clinical predictive algorithms while preserving
-implementation viability.* (manuscript in preparation)
+Ensor J, Van Calster B, Barreñada L, Wynants L, Perry BI. *A system for
+independent evaluation of clinical predictive algorithms while
+preserving implementation viability.* (manuscript in preparation)
 
 ## See also
 
 Useful links:
+
+- <https://joieensor.github.io/evaluatr/>
 
 - <https://github.com/JoieEnsor/evaluatr>
 
@@ -77,3 +79,17 @@ Useful links:
 ## Author
 
 **Maintainer**: Joie Ensor <j.ensor@bham.ac.uk>
+([ORCID](https://orcid.org/0000-0001-7481-0282))
+
+Authors:
+
+- Joie Ensor <j.ensor@bham.ac.uk>
+  ([ORCID](https://orcid.org/0000-0001-7481-0282))
+
+- Ben Van Calster ([ORCID](https://orcid.org/0000-0003-1613-7450))
+
+- Lasai Barreñada ([ORCID](https://orcid.org/0000-0001-8020-0210))
+
+- Laure Wynants ([ORCID](https://orcid.org/0000-0002-3037-122X))
+
+- Benjamin I. Perry ([ORCID](https://orcid.org/0000-0002-1533-026X))

@@ -35,4 +35,5 @@ Datasets used in the package examples and guides.
 
 - [`evaluatr`](https://joieensor.github.io/evaluatr/reference/evaluatr-package.md)
   [`evaluatr-package`](https://joieensor.github.io/evaluatr/reference/evaluatr-package.md)
-  :
+  : evaluatr: Secure Independent Evaluation of Clinical Prediction
+  Models

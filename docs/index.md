@@ -117,6 +117,8 @@ perf$metrics
 - [`vignette("developer-guide", package = "evaluatr")`](https://joieensor.github.io/evaluatr/articles/developer-guide.md)
   — for developers registering their own model with the evaluatr key
   service
+- [Pkgdown setup guide](https://joieensor.github.io/evaluatr/PKGDOWN.md)
+  — for maintaining and publishing the website
 
 ## Citing evaluatr
 

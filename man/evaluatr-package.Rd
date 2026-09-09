@@ -4,7 +4,7 @@
 \name{evaluatr-package}
 \alias{evaluatr}
 \alias{evaluatr-package}
-    itle{evaluatr: Secure Independent Evaluation of Clinical Prediction Models}
+\title{evaluatr: Secure Independent Evaluation of Clinical Prediction Models}
 \description{
 The \pkg{evaluatr} package implements a two-component system for
 independent external validation of clinical prediction algorithms,
@@ -69,20 +69,30 @@ validation dataset, 1,500 patients (multinomial outcome). Loaded via
 }
 
 \references{
-Ensor J, Van Calster B, Wynants L, Perry BI. \emph{A system for independent
+Ensor J, Van Calster B, Barreñada L, Wynants L, Perry BI. \emph{A system for independent
 evaluation of clinical predictive algorithms while preserving
 implementation viability.} (manuscript in preparation)
 }
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://joieensor.github.io/evaluatr/}
   \item \url{https://github.com/JoieEnsor/evaluatr}
   \item Report bugs at \url{https://github.com/JoieEnsor/evaluatr/issues}
 }
 
 }
 \author{
-\strong{Maintainer}: Joie Ensor \email{j.ensor@bham.ac.uk}
+\strong{Maintainer}: Joie Ensor \email{j.ensor@bham.ac.uk} (\href{https://orcid.org/0000-0001-7481-0282}{ORCID})
+
+Authors:
+\itemize{
+  \item Joie Ensor \email{j.ensor@bham.ac.uk} (\href{https://orcid.org/0000-0001-7481-0282}{ORCID})
+  \item Ben Van Calster (\href{https://orcid.org/0000-0003-1613-7450}{ORCID})
+  \item Lasai Barreñada (\href{https://orcid.org/0000-0001-8020-0210}{ORCID})
+  \item Laure Wynants (\href{https://orcid.org/0000-0002-3037-122X}{ORCID})
+  \item Benjamin I. Perry (\href{https://orcid.org/0000-0002-1533-026X}{ORCID})
+}
 
 }
 \keyword{package}
